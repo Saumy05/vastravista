@@ -1,0 +1,304 @@
+{
+  "cloth_detection": {
+    "boxes": [
+      [
+        "651.96954",
+        "417.31772",
+        "1588.0378",
+        "1071.8959"
+      ]
+    ],
+    "classes": [
+      "person"
+    ],
+    "confidences": [
+      0.9193907976150513
+    ],
+    "clothing_items": [
+      {
+        "type": "person",
+        "bbox": [
+          "651.96954",
+          "417.31772",
+          "1588.0378",
+          "1071.8959"
+        ],
+        "confidence": 0.9193907976150513,
+        "area": "612729.8"
+      }
+    ]
+  },
+  "color_analysis": {
+    "clothing_color_analysis": [
+      {
+        "clothing_type": "person",
+        "bbox": [
+          "651.96954",
+          "417.31772",
+          "1588.0378",
+          "1071.8959"
+        ],
+        "confidence": 0.9193907976150513,
+        "color_analysis": {
+          "dominant_colors": [
+            {
+              "rgb": [
+                219,
+                216,
+                206
+              ],
+              "bgr": [
+                206,
+                216,
+                219
+              ],
+              "hex": "#dbd8ce",
+              "percentage": 31.14,
+              "name": "white",
+              "hsv": [
+                46.15,
+                5.94,
+                85.88
+              ],
+              "dominance_rank": 2
+            },
+            {
+              "rgb": [
+                179,
+                169,
+                155
+              ],
+              "bgr": [
+                155,
+                169,
+                179
+              ],
+              "hex": "#b3a99b",
+              "percentage": 24.88,
+              "name": "red",
+              "hsv": [
+                35.0,
+                13.41,
+                70.2
+              ],
+              "dominance_rank": 3
+            },
+            {
+              "rgb": [
+                71,
+                56,
+                45
+              ],
+              "bgr": [
+                45,
+                56,
+                71
+              ],
+              "hex": "#47382d",
+              "percentage": 19.2,
+              "name": "red",
+              "hsv": [
+                25.38,
+                36.62,
+                27.84
+              ],
+              "dominance_rank": 1
+            },
+            {
+              "rgb": [
+                135,
+                111,
+                95
+              ],
+              "bgr": [
+                95,
+                111,
+                135
+              ],
+              "hex": "#876f5f",
+              "percentage": 15.12,
+              "name": "red",
+              "hsv": [
+                24.0,
+                29.63,
+                52.94
+              ],
+              "dominance_rank": 4
+            },
+            {
+              "rgb": [
+                29,
+                23,
+                18
+              ],
+              "bgr": [
+                18,
+                23,
+                29
+              ],
+              "hex": "#1d1712",
+              "percentage": 9.66,
+              "name": "black",
+              "hsv": [
+                27.27,
+                37.93,
+                11.37
+              ],
+              "dominance_rank": 5
+            }
+          ],
+          "method": "kmeans",
+          "total_colors": 5,
+          "image_size": [
+            654,
+            937
+          ]
+        },
+        "primary_color": {
+          "rgb": [
+            219,
+            216,
+            206
+          ],
+          "bgr": [
+            206,
+            216,
+            219
+          ],
+          "hex": "#dbd8ce",
+          "percentage": 31.14,
+          "name": "white",
+          "hsv": [
+            46.15,
+            5.94,
+            85.88
+          ],
+          "dominance_rank": 2
+        }
+      }
+    ],
+    "total_items": 1,
+    "analysis_method": "kmeans"
+  },
+  "skin_analysis": {
+    "brightness": "Dark",
+    "brightness_emoji": "\ud83c\udf19",
+    "brightness_value": 0.293,
+    "undertone": "Warm",
+    "undertone_emoji": "\ud83c\udf05",
+    "seasonal_type": "Deep Autumn",
+    "rgb": [
+      99,
+      71,
+      54
+    ],
+    "analysis_confidence": 0.85,
+    "face_data": {
+      "faces_detected": 1,
+      "face_regions": [
+        [
+          946,
+          609,
+          1266,
+          929
+        ]
+      ],
+      "skin_regions": [
+        "[[255 255 255 ...   0   0   0]\n [255 255 255 ...   0   0   0]\n [255 255 255 ...   0   0   0]\n ...\n [255 255 255 ...   0   0   0]\n [255 255 255 ...   0   0   0]\n [255 255 255 ...   0   0   0]]"
+      ],
+      "face_landmarks": [
+        {
+          "point_0": {
+            "x": 0.5485451221466064,
+            "y": 0.6285267472267151
+          },
+          "point_1": {
+            "x": 0.6252338290214539,
+            "y": 0.6280813813209534
+          },
+          "point_2": {
+            "x": 0.5966309905052185,
+            "y": 0.6856642365455627
+          },
+          "point_3": {
+            "x": 0.5925820469856262,
+            "y": 0.7586010098457336
+          },
+          "point_4": {
+            "x": 0.4892045557498932,
+            "y": 0.6819444298744202
+          },
+          "point_5": {
+            "x": 0.6545523405075073,
+            "y": 0.6779797673225403
+          }
+        }
+      ]
+    },
+    "skin_color": {
+      "rgb": [
+        99,
+        71,
+        54
+      ],
+      "bgr": [
+        54,
+        71,
+        99
+      ],
+      "hex": "#634736",
+      "hsv": [
+        22.72,
+        45.25,
+        39.07
+      ],
+      "pixel_count": 98120
+    }
+  },
+  "recommendations": {
+    "excellent_colors": [
+      "Coral",
+      "Peach",
+      "Golden Yellow",
+      "Warm Brown",
+      "Orange",
+      "Rust"
+    ],
+    "good_colors": [
+      "Beige",
+      "Camel",
+      "Olive",
+      "Warm Red",
+      "Cream",
+      "Gold"
+    ],
+    "avoid_colors": [
+      "Icy Blue",
+      "Pure White",
+      "Cool Gray",
+      "Purple",
+      "Silver"
+    ],
+    "outfit_suggestions": [
+      {
+        "occasion": "Professional",
+        "outfit": "Navy blazer + cream blouse + camel trousers",
+        "why": "Warm neutrals complement your undertone while maintaining professionalism"
+      },
+      {
+        "occasion": "Casual",
+        "outfit": "Coral/peach top + dark jeans + brown accessories",
+        "why": "Brings out your warm undertones, grounded by neutral denim"
+      }
+    ],
+    "styling_tips": [
+      "Gold jewelry complements your warm undertones better than silver",
+      "Earth tones and warm colors will make your skin glow",
+      "Avoid icy colors that can make you look washed out"
+    ],
+    "undertone_focus": "Warm",
+    "brightness_consideration": "Dark",
+    "seasonal_type": "Deep Autumn",
+    "confidence_score": 0.9
+  }
+}
