@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Analysis Results - VastraVista{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/results.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="results-container">
+    <!-- Header -->
+    <div class="results-header">
+        <h1>✨ Your Personalized Fashion Analysis</h1>
+        <p>Based on advanced AI and color science (Delta-E CIE2000)</p>
+        
+        <div class="results-actions">
+            <button id="newAnalysisBtn" class="btn btn-primary">
+                📸 New Analysis
+            </button>
+            <button id="downloadBtn" class="btn btn-success">
+                💾 Download Results
+            </button>
+        </div>
+    </div>
+    
+    <!-- Profile Section -->
+    <div id="profileSection"></div>
+    
+    <!-- Best Colors Section -->
+    <div class="section" id="colorsSection"></div>
+    
+    <!-- Outfit Recommendations Section -->
+    <div class="section" id="outfitsSection"></div>
+    
+    <!-- Style Tips Section -->
+    <div class="section" id="tipsSection"></div>
+    
+    <!-- Summary Section -->
+    <div class="section" id="summarySection"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/results_display.js') }}"></script>
+{% endblock %}
