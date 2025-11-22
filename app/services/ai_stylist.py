@@ -7,6 +7,8 @@ Also provides AI-powered image analysis insights
 import logging
 import json
 import base64
+import os
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -16,22 +18,72 @@ class AIStyler:
     
     def __init__(self):
         self.use_ai = False
-        self.ollama_model = "llama3.2"  # or "mistral", "phi3"
+        # Configurable Ollama endpoint and model via environment variables
+        self.ollama_url = os.environ.get('OLLAMA_URL', 'http://localhost:11434').rstrip('/')
+        self.ollama_model = os.environ.get('OLLAMA_MODEL', 'llama3.2')
         self._check_ollama_availability()
     
     def _check_ollama_availability(self):
         """Check if Ollama is installed and running"""
         try:
             import requests
-            response = requests.get("http://localhost:11434/api/tags", timeout=2)
-            if response.status_code == 200:
+            # Try a few endpoints to detect a running Ollama-like server
+            tried = []
+            urls = [f"{self.ollama_url}/api/tags", f"{self.ollama_url}/api/models"]
+            ok = False
+            for u in urls:
+                tried.append(u)
+                try:
+                    response = requests.get(u, timeout=4)
+                    if response.status_code == 200:
+                        ok = True
+                        break
+                except Exception:
+                    continue
+
+            # As a last resort try a tiny generate request (non-streaming, very small prompt)
+            if not ok:
+                try:
+                    # small generate probe with slightly longer timeout
+                    gresp = requests.post(
+                        f"{self.ollama_url}/api/generate",
+                        json={"model": self.ollama_model, "prompt": "test", "stream": False, "options": {"num_predict": 1}},
+                        timeout=6
+                    )
+                    if gresp.status_code == 200:
+                        ok = True
+                except Exception:
+                    ok = False
+
+            if ok:
                 self.use_ai = True
-                logger.info("✅ Ollama AI available - will use AI-generated advice")
+                logger.info(f"✅ Ollama AI available at {self.ollama_url} - using model: {self.ollama_model}")
             else:
-                logger.info("💡 Ollama not available - using smart template system")
+                logger.info(f"💡 Ollama not available at {self.ollama_url} (tried: {tried}) - using smart template system")
         except Exception as e:
             logger.info(f"💡 Ollama not running - using smart template system: {str(e)}")
             self.use_ai = False
+
+    def _call_generate(self, payload, timeout=30, retries=1):
+        """Call the Ollama generate endpoint with simple retry logic."""
+        try:
+            import requests
+        except Exception:
+            return None
+
+        last_exc = None
+        for attempt in range(retries + 1):
+            try:
+                resp = requests.post(f"{self.ollama_url}/api/generate", json=payload, timeout=timeout)
+                return resp
+            except Exception as e:
+                last_exc = e
+                logger.debug(f"Generate attempt {attempt+1} failed: {str(e)}")
+                # small backoff
+                time.sleep(0.4)
+
+        logger.warning(f"All generate attempts failed: {str(last_exc)}")
+        return None
     
     def generate_occasion_tips(self, occasion, monk_level, gender, colors_list, brightness):
         """
@@ -45,6 +97,12 @@ class AIStyler:
             brightness: Skin brightness value
         """
         logger.info(f"🎯 Generating tips for {occasion} - AI Mode: {self.use_ai}")
+        # Refresh availability in case Ollama started after app boot
+        try:
+            self._check_ollama_availability()
+        except Exception:
+            pass
+
         if self.use_ai:
             logger.info(f"🤖 Calling Ollama AI with model: {self.ollama_model}")
             return self._generate_ai_tips(occasion, monk_level, gender, colors_list, brightness)
@@ -55,6 +113,8 @@ class AIStyler:
     def _generate_ai_tips(self, occasion, monk_level, gender, colors_list, brightness):
         """Generate tips using local AI model"""
         try:
+            # Ensure Ollama is available before making the request
+            self._check_ollama_availability()
             import requests
             
             # Create personalized prompt
@@ -65,28 +125,21 @@ class AIStyler:
 Best colors: {colors_str}
 
 Rules:
-- Use THEIR colors: {colors_str}
-- 1 short sentence each
-- Specific outfit combos
-- No intro text
 
 Format: 4 lines starting with -"""
 
-            response = requests.post(
-                "http://localhost:11434/api/generate",
-                json={
-                    "model": self.ollama_model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {
-                        "temperature": 0.8,
-                        "num_predict": 150,
-                        "top_k": 40,
-                        "top_p": 0.9
-                    }
-                },
-                timeout=45
-            )
+            payload = {
+                "model": self.ollama_model,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "temperature": 0.8,
+                    "num_predict": 150,
+                    "top_k": 40,
+                    "top_p": 0.9
+                }
+            }
+            response = self._call_generate(payload, timeout=60, retries=1)
             
             if response.status_code == 200:
                 result = response.json()
@@ -124,6 +177,12 @@ Format: 4 lines starting with -"""
         Returns:
             Dict with AI analysis insights or None if AI not available
         """
+        # Refresh availability (Ollama may have started after app boot)
+        try:
+            self._check_ollama_availability()
+        except Exception:
+            pass
+
         if not self.use_ai:
             logger.warning("🧠 AI not available for image analysis - Ollama not running")
             return None
@@ -162,10 +221,6 @@ Format: 4 lines starting with -"""
             prompt = f"""You are a professional fashion consultant analyzing this person's photo.
 
 Technical Analysis Results:
-- Skin Tone: {monk_level}
-- Gender: {gender}
-- Age: {age_group}
-- Best Colors: {colors_str}
 
 Provide a brief, friendly fashion analysis in 3-4 sentences covering:
 1. Overall style impression and what stands out
@@ -175,19 +230,16 @@ Provide a brief, friendly fashion analysis in 3-4 sentences covering:
 Be encouraging, specific, and professional. Keep it under 80 words."""
 
             # Call Ollama with vision model if available, else use text-only
-            response = requests.post(
-                "http://localhost:11434/api/generate",
-                json={
-                    "model": self.ollama_model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {
-                        "temperature": 0.7,
-                        "num_predict": 120
-                    }
-                },
-                timeout=30
-            )
+            payload = {
+                "model": self.ollama_model,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "temperature": 0.7,
+                    "num_predict": 120
+                }
+            }
+            response = self._call_generate(payload, timeout=40, retries=1)
             
             if response.status_code == 200:
                 result = response.json()
@@ -219,6 +271,12 @@ Be encouraging, specific, and professional. Keep it under 80 words."""
         Returns:
             Dict with AI's independent analysis or None
         """
+        # Refresh availability in case Ollama came up later
+        try:
+            self._check_ollama_availability()
+        except Exception:
+            pass
+
         if not self.use_ai:
             logger.warning("🧠 AI not available for independent analysis - Ollama not running")
             return None
@@ -257,19 +315,16 @@ COLORS: [color1], [color2], [color3]
 
 Be precise and concise. Analyze based only on what you see in the image."""
 
-            response = requests.post(
-                "http://localhost:11434/api/generate",
-                json={
-                    "model": self.ollama_model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {
-                        "temperature": 0.4,
-                        "num_predict": 150
-                    }
-                },
-                timeout=35
-            )
+            payload = {
+                "model": self.ollama_model,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "temperature": 0.4,
+                    "num_predict": 150
+                }
+            }
+            response = self._call_generate(payload, timeout=45, retries=1)
             
             if response.status_code == 200:
                 result = response.json()
@@ -412,6 +467,12 @@ Be precise and concise. Analyze based only on what you see in the image."""
         Returns:
             Dict with verification status, confidence, and any concerns
         """
+        # Make sure we re-check availability at verification time
+        try:
+            self._check_ollama_availability()
+        except Exception:
+            pass
+
         if not self.use_ai:
             logger.info("🧠 AI not available for verification - accepting results")
             return {
@@ -458,19 +519,16 @@ CONCERNS: list any issues (or "none")
 
 Keep response under 50 words."""
 
-            response = requests.post(
-                "http://localhost:11434/api/generate",
-                json={
-                    "model": self.ollama_model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {
-                        "temperature": 0.3,
-                        "num_predict": 100
-                    }
-                },
-                timeout=20
-            )
+            payload = {
+                "model": self.ollama_model,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "temperature": 0.3,
+                    "num_predict": 100
+                }
+            }
+            response = self._call_generate(payload, timeout=30, retries=1)
             
             if response.status_code == 200:
                 result = response.json()

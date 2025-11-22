@@ -16,6 +16,7 @@ from app.services.color_analyzer import ColorAnalyzer
 from app.services.recommendation_engine import FashionRecommendationEngine
 from app.services.ai_stylist import ai_stylist
 from app.utils.validators import validate_image_file
+import shutil
 
 # Create blueprint
 api_bp = Blueprint('api', __name__)
@@ -90,6 +91,17 @@ def analyze_image():
         
         upload_path = Path(current_app.config['UPLOAD_FOLDER']) / filename
         file.save(str(upload_path))
+
+        # Ensure a persistent original copy is kept in an `originals/` folder
+        try:
+            originals_dir = Path(current_app.config['UPLOAD_FOLDER']) / 'originals'
+            originals_dir.mkdir(parents=True, exist_ok=True)
+            persistent_path = originals_dir / filename
+            # Copy the uploaded file to originals (preserve original upload)
+            shutil.copyfile(str(upload_path), str(persistent_path))
+            logger.info(f"Uploaded image saved to: {upload_path} (persistent copy: {persistent_path})")
+        except Exception as e:
+            logger.warning(f"Could not create persistent copy of upload: {e}")
         
         logger.info(f"Image uploaded: {filename}")
         
@@ -296,46 +308,75 @@ def run_complete_analysis(image, image_path=None):
             'total_outfits': all_outfits
         }
         
+        # AI status tracking (diagnostics)
+        ai_status = {
+            'available_at_start': ai_stylist.use_ai,
+            'verification': None,
+            'independent_analysis': None,
+            'comparison': None,
+            'insights': None,
+            'errors': []
+        }
+
         # AI verification of analysis results
         logger.info("🔍 Verifying analysis with AI...")
-        verification = ai_stylist.verify_analysis({
-            'gender': first_person['gender'],
-            'age': first_person['age'],
-            'skin_tone': first_person['skin_tone'],
-            'best_colors': first_person['best_colors']
-        })
-        result['data']['verification'] = verification
-        logger.info(f"✅ Verification complete: {verification['confidence']}% confidence")
+        try:
+            verification = ai_stylist.verify_analysis({
+                'gender': first_person['gender'],
+                'age': first_person['age'],
+                'skin_tone': first_person['skin_tone'],
+                'best_colors': first_person['best_colors']
+            })
+            result['data']['verification'] = verification
+            ai_status['verification'] = {
+                'attempted': True,
+                'result_present': bool(verification),
+                'confidence': verification.get('confidence') if verification else None
+            }
+            logger.info(f"✅ Verification complete: {verification.get('confidence', 'N/A')}% confidence")
+        except Exception as e:
+            ai_status['errors'].append(f"verification_error: {str(e)}")
+            logger.error(f"AI verification error (caught in run_complete_analysis): {e}")
         
         # AI independent analysis and comparison
         if image_path:
             logger.info(f"🤖 Starting AI independent analysis... (image_path: {image_path})")
             try:
                 ai_independent = ai_stylist.analyze_image_independently(image_path)
-                
+                ai_status['independent_analysis'] = {'attempted': True, 'result_present': bool(ai_independent)}
+
                 if ai_independent:
                     result['data']['ai_analysis'] = ai_independent
                     logger.info("✅ AI independent analysis completed")
                     
                     # Compare technical vs AI analysis
                     logger.info("🔄 Comparing technical and AI analyses...")
-                    comparison = ai_stylist.compare_analyses(
-                        {
-                            'gender': first_person['gender'],
-                            'age': first_person['age'],
-                            'skin_tone': first_person['skin_tone'],
-                            'best_colors': first_person['best_colors']
-                        },
-                        ai_independent
-                    )
-                    result['data']['comparison'] = comparison
-                    logger.info(f"✅ Comparison complete: {comparison['agreement_score']}% agreement")
+                    try:
+                        comparison = ai_stylist.compare_analyses(
+                            {
+                                'gender': first_person['gender'],
+                                'age': first_person['age'],
+                                'skin_tone': first_person['skin_tone'],
+                                'best_colors': first_person['best_colors']
+                            },
+                            ai_independent
+                        )
+                        result['data']['comparison'] = comparison
+                        ai_status['comparison'] = {'attempted': True, 'result_present': True, 'agreement_score': comparison.get('agreement_score')}
+                        logger.info(f"✅ Comparison complete: {comparison.get('agreement_score', 'N/A')}% agreement")
+                    except Exception as comp_err:
+                        ai_status['comparison'] = {'attempted': True, 'result_present': False}
+                        ai_status['errors'].append(f"comparison_error: {str(comp_err)}")
+                        logger.error(f"AI comparison error: {comp_err}")
                 else:
+                    ai_status['independent_analysis']['result_present'] = False
                     logger.warning("⚠️ AI independent analysis returned None")
             except Exception as ai_err:
+                ai_status['independent_analysis'] = {'attempted': True, 'result_present': False}
+                ai_status['errors'].append(f"independent_error: {str(ai_err)}")
                 logger.error(f"❌ AI independent analysis error: {ai_err}")
                 logger.error(traceback.format_exc())
-            
+
             # AI-powered insights (fashion commentary)
             logger.info("🤖 Generating AI fashion insights...")
             try:
@@ -345,15 +386,21 @@ def run_complete_analysis(image, image_path=None):
                     'age_group': first_person['age']['age_group'],
                     'best_colors': first_person['best_colors']
                 })
-            
+                ai_status['insights'] = {'attempted': True, 'result_present': bool(ai_insights)}
+
                 if ai_insights:
                     result['data']['ai_insights'] = ai_insights
                     logger.info("✅ AI fashion insights added to results")
                 else:
                     logger.warning("⚠️ AI insights returned None")
             except Exception as ai_err:
+                ai_status['insights'] = {'attempted': True, 'result_present': False}
+                ai_status['errors'].append(f"insights_error: {str(ai_err)}")
                 logger.error(f"❌ AI insights generation error: {ai_err}")
                 logger.error(traceback.format_exc())
+
+            # Attach ai_status diagnostics to response for visibility
+            result['data']['ai_status'] = ai_status
         else:
             logger.warning("⚠️ No image_path provided, skipping AI analysis")
         

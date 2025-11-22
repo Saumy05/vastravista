@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block title %}Digital Wardrobe - VastraVista{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="glass-card text-center mb-4">
+        <h1>👗 Your Digital Wardrobe</h1>
+        <p>Manage your clothing items, view AI color analysis, and get smart outfit recommendations.</p>
+    </div>
+    <div id="wardrobeItems" class="row g-4">
+        <!-- Wardrobe items will be dynamically loaded here -->
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/wardrobe.js') }}"></script>
+{% endblock %}

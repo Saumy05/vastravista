@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block title %}Style Quiz - VastraVista{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="glass-card text-center mb-4">
+        <h1>📝 Style DNA Quiz</h1>
+        <p>Answer a few questions to discover your unique style profile and get personalized fashion tips!</p>
+    </div>
+    <div id="quizSection">
+        <!-- Quiz questions and results will be dynamically loaded here -->
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/quiz.js') }}"></script>
+{% endblock %}

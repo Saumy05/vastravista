@@ -6,6 +6,8 @@
 Flask>=3.0.0
 Flask-CORS>=4.0.0
 Werkzeug>=3.0.0
+Flask-Login>=0.6.3
+Flask-SQLAlchemy>=3.1.1
 
 # Core Deep Learning & Computer Vision
 opencv-python>=4.8.0
@@ -28,6 +30,9 @@ ml-dtypes==0.3.2
 
 # Image Processing
 Pillow>=10.0.0
+
+# PDF Generation
+reportlab>=4.4.5
 
 # Color Analysis
 webcolors>=1.13

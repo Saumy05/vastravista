@@ -13,7 +13,14 @@ class Config:
     
     # Paths
     BASE_DIR = Path(__file__).parent.parent.parent
-    UPLOAD_FOLDER = BASE_DIR / 'static' / 'uploads'
+    # Allow overriding upload folder via environment variable (can be absolute or relative)
+    env_upload = os.environ.get('UPLOAD_FOLDER', '')
+    if env_upload:
+        env_path = Path(env_upload)
+        # If relative path provided, resolve relative to project root
+        UPLOAD_FOLDER = (BASE_DIR / env_path).resolve() if not env_path.is_absolute() else env_path
+    else:
+        UPLOAD_FOLDER = BASE_DIR / 'static' / 'uploads'
     MODEL_DIR = BASE_DIR / 'ml' / 'saved_models'
     DATA_DIR = BASE_DIR / 'data'
     WARDROBE_FOLDER = BASE_DIR / 'data' / 'wardrobe'
