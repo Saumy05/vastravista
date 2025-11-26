@@ -1,7 +1,7 @@
 """
-VastraVista API Package
+API Package (Auth)
 """
 
-from app.api.routes import api_bp
+from app.api.auth import auth_bp
 
-__all__ = ['api_bp']
+__all__ = ['auth_bp']

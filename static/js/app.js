@@ -4,17 +4,9 @@
 // Global state
 const appState = {
     currentAnalysis: null,
-    wardrobeItems: [],
-    savedOutfits: [],
     monkScaleData: null,
     cameraStream: null,
     arStream: null,
-    analytics: {
-        totalAnalyses: 0,
-        wardrobeItems: 0,
-        co2Saved: 0,
-        aiRequests: 0
-    }
 };
 
 // DOM Elements
@@ -25,7 +17,6 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeElements();
     setupEventListeners();
     loadMonkScaleData();
-    loadAnalytics();
 });
 
 function initializeElements() {
@@ -46,12 +37,7 @@ function initializeElements() {
         analysisResults: document.getElementById('analysisResults'),
         
         // Wardrobe tab
-        addWardrobeItem: document.getElementById('addWardrobeItem'),
-        generateOutfits: document.getElementById('generateOutfits'),
-        analyzeWardrobe: document.getElementById('analyzeWardrobe'),
-        wardrobeGrid: document.getElementById('wardrobeGrid'),
-        outfitSuggestions: document.getElementById('outfitSuggestions'),
-        outfitsContainer: document.getElementById('outfitsContainer'),
+        
         
         // Colors tab
         loadMonkScale: document.getElementById('loadMonkScale'),
@@ -78,16 +64,10 @@ function initializeElements() {
         colorTryBtns: document.querySelectorAll('.color-try-btn'),
         
         // Shopping tab
-        shopCategory: document.getElementById('shopCategory'),
-        shopGender: document.getElementById('shopGender'),
-        shopColor: document.getElementById('shopColor'),
-        searchProducts: document.getElementById('searchProducts'),
-        productsGrid: document.getElementById('productsGrid'),
-        productsContainer: document.getElementById('productsContainer'),
+        
         
         // Analytics tab
-        refreshAnalytics: document.getElementById('refreshAnalytics'),
-        downloadReport: document.getElementById('downloadReport'),
+        
         
         // Loading overlay
         loadingOverlay: document.getElementById('loadingOverlay'),
@@ -115,19 +95,25 @@ function setupEventListeners() {
     });
     
     // Analysis tab
-    elements.uploadArea.addEventListener('click', () => elements.fileInput.click());
-    elements.uploadArea.addEventListener('dragover', handleDragOver);
-    elements.uploadArea.addEventListener('dragleave', handleDragLeave);
-    elements.uploadArea.addEventListener('drop', handleDrop);
-    elements.fileInput.addEventListener('change', handleFileSelect);
-    elements.startCamera.addEventListener('click', startWebcam);
-    elements.captureBtn.addEventListener('click', captureImage);
-    elements.stopCamera.addEventListener('click', stopWebcam);
+    if (elements.uploadArea && elements.fileInput) {
+        elements.uploadArea.addEventListener('click', () => elements.fileInput.click());
+        elements.uploadArea.addEventListener('dragover', handleDragOver);
+        elements.uploadArea.addEventListener('dragleave', handleDragLeave);
+        elements.uploadArea.addEventListener('drop', handleDrop);
+        elements.fileInput.addEventListener('change', handleFileSelect);
+    }
+    if (elements.startCamera) {
+        elements.startCamera.addEventListener('click', startWebcam);
+    }
+    if (elements.captureBtn) {
+        elements.captureBtn.addEventListener('click', captureImage);
+    }
+    if (elements.stopCamera) {
+        elements.stopCamera.addEventListener('click', stopWebcam);
+    }
     
     // Wardrobe tab
-    elements.addWardrobeItem.addEventListener('click', addWardrobeItem);
-    elements.generateOutfits.addEventListener('click', generateOutfits);
-    elements.analyzeWardrobe.addEventListener('click', analyzeWardrobe);
+    
     
     // Colors tab
     elements.loadMonkScale.addEventListener('click', displayMonkScale);
@@ -145,11 +131,10 @@ function setupEventListeners() {
     });
     
     // Shopping tab
-    elements.searchProducts.addEventListener('click', searchProducts);
+    
     
     // Analytics tab
-    elements.refreshAnalytics.addEventListener('click', loadAnalytics);
-    elements.downloadReport.addEventListener('click', downloadPDFReport);
+    
 }
 
 // ============ TAB SWITCHING ============
@@ -257,6 +242,25 @@ async function processImage(file) {
     // Store the image file for display
     const imageUrl = URL.createObjectURL(file);
     appState.currentImageUrl = imageUrl;
+    if (elements.analysisResults) {
+        let w = 0, h = 0;
+        try {
+            const bmp = await createImageBitmap(file);
+            w = bmp.width; h = bmp.height; bmp.close();
+        } catch (e) {}
+        const containerStyle = w && h
+            ? `width:100%; max-width:480px; aspect-ratio: ${w} / ${h}; margin:0 auto; border-radius:12px; border:3px solid #667eea; background:#f8f9ff; display:flex; align-items:center; justify-content:center; overflow:hidden;`
+            : `width:100%; max-width:480px; min-height:220px; margin:0 auto; border-radius:12px; border:3px solid #667eea; background:#f8f9ff; display:flex; align-items:center; justify-content:center; overflow:hidden;`;
+        const previewHtml = `
+            <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin-bottom: 20px;">
+                <h4 style="color:#667eea; margin-bottom:10px; text-align:center;">Analyzing Selected Image…</h4>
+                <div style="${containerStyle}">
+                    <img src="${imageUrl}" alt="Selected image" style="max-width:100%; max-height:100%; object-fit:contain; border-radius:8px;" />
+                </div>
+            </div>`;
+        elements.analysisResults.innerHTML = previewHtml;
+        elements.analysisResults.classList.remove('hidden');
+    }
     
     showLoading('Analyzing image...', 'Detecting face and extracting features');
     
@@ -295,7 +299,6 @@ async function processImage(file) {
         updateProgress(100);
         
         appState.currentAnalysis = result;
-        appState.analytics.totalAnalyses++;
         
         setTimeout(() => {
             hideLoading();
@@ -322,30 +325,33 @@ function displayAnalysisResults(result) {
     let html = '';
     
     // Display uploaded image and AI insights at the top
-    if (appState.currentImageUrl) {
+    {
         const skinData = data.skin_tone || {};
         const skinHex = skinData.hex || '#000000';
         const skinRgb = skinData.rgb || [0, 0, 0];
         const monkLevel = skinData.monk_scale_level || 'N/A';
-        const brightness = skinData.brightness || 'N/A';
+        const bRaw = skinData.brightness || skinData.brightness_val;
+        const brightness = typeof bRaw === 'number' ? `${Math.max(0, Math.min(100, Math.round((bRaw/255)*100)))}%` : (bRaw || 'N/A');
+        const undertone = skinData.undertone || '';
+        const backendPath = data.image_path || '';
+        const fileName = backendPath ? backendPath.split('/').pop() : '';
+        const displayUrl = appState.currentImageUrl || (fileName ? '/uploads/' + fileName : '');
         
         html += `
             <div style="background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 30px;">
                 <h3 style="color: #667eea; margin-bottom: 20px; text-align: center; font-size: 1.8em;">📸 Your Analyzed Photo</h3>
                 <div style="display: flex; gap: 30px; align-items: start; flex-wrap: wrap;">
-                    <!-- Image Section -->
-                    <div style="flex: 1; min-width: 300px; text-align: center;">
-                        <img src="${appState.currentImageUrl}" alt="Analyzed Person" 
-                             style="max-width: 100%; max-height: 400px; border-radius: 12px; 
-                                    box-shadow: 0 8px 30px rgba(0,0,0,0.2); object-fit: contain; 
-                                    border: 4px solid #667eea;" />
-                        <div style="margin-top: 15px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                                    color: white; padding: 10px; border-radius: 8px; font-weight: 600;">
-                            ✅ Analysis Complete
+                    <div style="flex: 1; min-width: 300px;">
+                        <div style="width: 100%; max-width: 480px; min-height: 220px; margin: 0 auto; border-radius: 12px; border: 4px solid #667eea; background: #f8f9ff; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 30px rgba(0,0,0,0.12); overflow: hidden;">
+                            ${displayUrl ? `
+                                <img src="${displayUrl}" data-backend="${backendPath}" onerror="handleAnalyzedImageError(this)" onload="if(this.naturalWidth&&this.naturalHeight){this.parentElement.style.aspectRatio=this.naturalWidth+' / '+this.naturalHeight;}" alt="Analyzed Person" style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px;" />
+                            ` : `
+                                <div style="text-align:center; color:#667eea; font-weight:600;">Image loading...</div>
+                            `}
                         </div>
+                        <div style="margin-top: 15px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 10px; border-radius: 8px; font-weight: 600; text-align:center;">✅ Analysis Complete</div>
                         ${data.verification ? `
-                        <div style="margin-top: 10px; background: ${data.verification.verified ? 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)' : 'linear-gradient(135deg, #FFA726 0%, #FF9800 100%)'}; 
-                                    color: white; padding: 10px; border-radius: 8px; font-size: 0.9em;">
+                        <div style="margin-top: 10px; background: ${data.verification.verified ? 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)' : 'linear-gradient(135deg, #FFA726 0%, #FF9800 100%)'}; color: white; padding: 10px; border-radius: 8px; font-size: 0.9em; text-align:center;">
                             ${data.verification.verified ? '✓' : '⚠'} AI Verified: ${data.verification.confidence}%
                             <div style="font-size: 0.8em; opacity: 0.9; margin-top: 5px;">${data.verification.method}</div>
                         </div>
@@ -386,6 +392,12 @@ function displayAnalysisResults(result) {
                                 <span style="font-weight: 600; color: #667eea;">Brightness:</span>
                                 <span style="color: #333;">${brightness}</span>
                             </div>
+                            ${undertone ? `
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top:8px;">
+                                <span style="font-weight: 600; color: #667eea;">Undertone:</span>
+                                <span style="color: #333;">${undertone}</span>
+                            </div>
+                            ` : ''}
                         </div>
                         
                         <div style="margin-top: 15px; padding: 12px; background: rgba(102, 126, 234, 0.1); 
@@ -502,11 +514,37 @@ function displayAnalysisResults(result) {
                 </div>
             `;
         }
+
+        if (data.clothing_feedback && data.clothing_color) {
+            const fb = data.clothing_feedback;
+            const cc = data.clothing_color;
+            const badgeColor = fb.quality === 'excellent' ? '#10b981' : (fb.quality === 'good' ? '#3b82f6' : '#ef4444');
+            const badgeText = fb.quality === 'excellent' ? 'Excellent' : (fb.quality === 'good' ? 'Good' : 'Needs Improvement');
+            const detectedHex = cc.hex || '#666';
+            const detectedName = (cc.nearest && cc.nearest.color_name) || 'Current Color';
+            const recName = (fb.closest_recommendation && (fb.closest_recommendation.color_name || fb.closest_recommendation.name)) || '';
+            html += `
+                <div style="background: #ffffff; padding: 24px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 30px; border-left: 6px solid ${badgeColor};">
+                    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px;">
+                        <h3 style="margin:0; color:#333; font-size:1.4em; display:flex; align-items:center; gap:10px;">
+                            <span>👗 Outfit Color Feedback</span>
+                            <span style="background:${badgeColor}; color:white; padding:6px 10px; border-radius:12px; font-size:0.8em;">${badgeText}</span>
+                        </h3>
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            <div title="Detected" style="width:32px; height:32px; border-radius:6px; border:2px solid #ddd; background:${detectedHex}"></div>
+                            ${recName ? `<div title="Closest recommended" style="width:32px; height:32px; border-radius:6px; border:2px solid ${badgeColor}; background:${(fb.closest_recommendation && fb.closest_recommendation.hex) || '#ccc'}"></div>` : ''}
+                        </div>
+                    </div>
+                    <div style="margin-top:12px; color:#555; font-size:1em;">${fb.message}</div>
+                    ${recName ? `<div style="margin-top:8px; color:#666; font-size:0.9em;">Closest recommended: <strong>${recName}</strong> • ΔE ${Number(fb.delta_e || 0).toFixed(1)}</div>` : ''}
+                </div>
+            `;
+        }
     }
     
     if (isMultipleFaces && data.faces) {
         // MULTIPLE FACES DETECTED - Show all persons
-        html = `
+        html += `
             <div style="background: #f8f9ff; padding: 30px; border-radius: 15px;">
                 <h3 style="color: #667eea; margin-bottom: 10px;">✅ Analysis Complete</h3>
                 <div style="padding: 15px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; color: white; margin-bottom: 30px; text-align: center;">
@@ -528,35 +566,42 @@ function displayAnalysisResults(result) {
         const ageData = data.age || {};
         const skinData = data.skin_tone || data.monk_scale_analysis || {};
         
-        const gender = genderData.gender || result.gender || 'Unknown';
-        const genderConf = genderData.confidence || 0;
-        const age = ageData.estimated_age || ageData.age_group || result.age || 'N/A';
-        const ageConf = ageData.confidence || 0;
+        const gender = (data.final && data.final.gender) || genderData.gender || result.gender || 'Unknown';
+        const genderConf = Number(genderData.confidence || 0);
+        const age = (data.final && data.final.estimated_age) || ageData.estimated_age || ageData.age_group || result.age || 'N/A';
+        const ageConf = Number(ageData.confidence || 0);
         const monkScale = skinData.monk_scale_level || data.monk_scale_level || result.monk_scale || 'N/A';
-        const skinBrightness = skinData.brightness || 'N/A';
+        const sbRaw = skinData.brightness || skinData.brightness_val;
+        const skinBrightness = typeof sbRaw === 'number' ? `${Math.max(0, Math.min(100, Math.round((sbRaw/255)*100)))}%` : (sbRaw || 'N/A');
         
         // Calculate overall confidence properly (average of gender + age)
         const overallConf = (genderConf + ageConf) / 2;
+        const genderConfPct = Math.max(0, Math.min(100, Math.round(genderConf <= 1 ? genderConf * 100 : genderConf)));
+        const ageConfPct = Math.max(0, Math.min(100, Math.round(ageConf <= 1 ? ageConf * 100 : ageConf)));
+        const overallConfPct = Math.max(0, Math.min(100, Math.round(overallConf <= 1 ? overallConf * 100 : overallConf)));
+        const finalAgeNum = typeof ((data.final && data.final.estimated_age)) === 'number' ? (data.final && data.final.estimated_age) : ageData.estimated_age;
+        const ageIsNumber = typeof finalAgeNum === 'number' && isFinite(finalAgeNum);
+        const ageText = ageIsNumber ? `${finalAgeNum} years` : (typeof age === 'string' ? age : 'N/A');
         
         console.log('📊 Debug - Age:', age, 'AgeData:', ageData);
         console.log('📊 Debug - Gender Conf:', genderConf, 'Age Conf:', ageConf, 'Overall:', overallConf);
         
-        html = `
+        html += `
         <div style="background: #f8f9ff; padding: 30px; border-radius: 15px;">
             <h3 style="color: #667eea; margin-bottom: 25px;">✅ Analysis Complete</h3>
             
             <div class="stats-grid">
-                <div class="stat-card">
+                <div class="stat-card" style="background: ${getGradientByConfidence(genderConfPct)};">
                     <div style="font-size: 2em;">👤</div>
                     <div style="margin-top: 10px; font-size: 1.2em;">${gender}</div>
                     <div style="font-size: 0.9em; opacity: 0.8;">Gender</div>
-                    <div style="font-size: 0.75em; margin-top: 5px;">${genderConf.toFixed(0)}% confidence</div>
+                    <div style="font-size: 0.75em; margin-top: 5px;">${genderConfPct}% confidence</div>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card" style="background: ${getGradientByConfidence(ageConfPct)};">
                     <div style="font-size: 2em;">🎂</div>
-                    <div style="margin-top: 10px; font-size: 1.2em;">${age || 'Loading...'} ${age !== 'N/A' && age !== 'Loading...' ? 'years' : ''}</div>
+                    <div style="margin-top: 10px; font-size: 1.2em;">${ageText}</div>
                     <div style="font-size: 0.9em; opacity: 0.8;">Age</div>
-                    ${ageConf > 0 ? `<div style="font-size: 0.75em; margin-top: 5px;">${ageConf.toFixed(0)}% confidence</div>` : ''}
+                    ${ageConfPct > 0 ? `<div style="font-size: 0.75em; margin-top: 5px;">${ageConfPct}% confidence</div>` : ''}
                 </div>
                 <div class="stat-card">
                     <div style="font-size: 2em;">🎨</div>
@@ -564,9 +609,9 @@ function displayAnalysisResults(result) {
                     <div style="font-size: 0.9em; opacity: 0.8;">Monk Scale</div>
                     ${skinBrightness !== 'N/A' && monkScale !== 'N/A' ? `<div style="font-size: 0.75em; margin-top: 3px;">${skinBrightness}</div>` : ''}
                 </div>
-                <div class="stat-card">
+                <div class="stat-card" style="background: ${getGradientByConfidence(overallConfPct)};">
                     <div style="font-size: 2em;">✨</div>
-                    <div style="margin-top: 10px; font-size: 1.2em;">${overallConf > 0 ? overallConf.toFixed(0) + '%' : 'N/A'}</div>
+                    <div style="margin-top: 10px; font-size: 1.2em;">${overallConfPct > 0 ? overallConfPct + '%' : 'N/A'}</div>
                     <div style="font-size: 0.9em; opacity: 0.8;">Overall Confidence</div>
                 </div>
             </div>
@@ -656,7 +701,6 @@ function displayAnalysisResults(result) {
             ` : ''}
             
             <div style="margin-top: 30px; text-align: center;">
-                <button class="btn btn-primary" onclick="saveToWardrobe()">💾 Save to Wardrobe</button>
                 <button class="btn btn-secondary" onclick="getDetailedAIAdvice()">🤖 Get AI Advice</button>
                 <button class="btn btn-outline" onclick="tryARMode()">✨ Try AR Mode</button>
             </div>
@@ -674,11 +718,17 @@ function generatePersonAnalysis(person, personNum, totalPeople) {
     const skinData = person.skin_tone || {};
     
     const gender = genderData.gender || 'Unknown';
-    const genderConf = genderData.confidence || 0;
+    const genderConf = Number(genderData.confidence || 0);
+    const genderConfPct = Math.max(0, Math.min(100, Math.round(genderConf <= 1 ? genderConf * 100 : genderConf)));
     const age = ageData.estimated_age || ageData.age_group || 'N/A';
     const monkScale = skinData.monk_scale_level || 'N/A';
-    const skinBrightness = skinData.brightness || 'N/A';
-    const overallConf = (genderData.confidence + (ageData.confidence || 0)) / 2 || 0;
+    const sbRaw = skinData.brightness || skinData.brightness_val;
+    const skinBrightness = typeof sbRaw === 'number' ? `${Math.max(0, Math.min(100, Math.round((sbRaw/255)*100)))}%` : (sbRaw || 'N/A');
+    const overallConfRaw = ((genderData.confidence || 0) + (ageData.confidence || 0)) / 2;
+    const overallConfPct = Math.max(0, Math.min(100, Math.round(overallConfRaw <= 1 ? overallConfRaw * 100 : overallConfRaw)));
+    const ageConfPct = Math.max(0, Math.min(100, Math.round((Number(ageData.confidence || 0)) <= 1 ? Number(ageData.confidence || 0) * 100 : Number(ageData.confidence || 0))));
+    const ageIsNumber = typeof ageData.estimated_age === 'number' && isFinite(ageData.estimated_age);
+    const ageText = ageIsNumber ? `${ageData.estimated_age} years` : (typeof age === 'string' ? age : 'N/A');
     
     return `
         <div style="margin-bottom: 40px; padding: 25px; background: white; border-radius: 15px; border: 3px solid ${personNum === 1 ? '#667eea' : '#764ba2'}; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
@@ -692,16 +742,17 @@ function generatePersonAnalysis(person, personNum, totalPeople) {
             </div>
             
             <div class="stats-grid" style="margin-bottom: 25px;">
-                <div class="stat-card">
+                <div class="stat-card" style="background: ${getGradientByConfidence(genderConfPct)};">
                     <div style="font-size: 2em;">👤</div>
                     <div style="margin-top: 10px; font-size: 1.2em;">${gender}</div>
                     <div style="font-size: 0.9em; opacity: 0.8;">Gender</div>
-                    <div style="font-size: 0.75em; margin-top: 5px;">${genderConf.toFixed(0)}% confidence</div>
+                    <div style="font-size: 0.75em; margin-top: 5px;">${genderConfPct}% confidence</div>
                 </div>
                 <div class="stat-card">
                     <div style="font-size: 2em;">🎂</div>
-                    <div style="margin-top: 10px; font-size: 1.2em;">${age} ${age !== 'N/A' ? 'years' : ''}</div>
+                    <div style="margin-top: 10px; font-size: 1.2em;">${ageText}</div>
                     <div style="font-size: 0.9em; opacity: 0.8;">Age</div>
+                    ${ageConfPct > 0 ? `<div style="font-size: 0.75em; margin-top: 5px;">${ageConfPct}% confidence</div>` : ''}
                 </div>
                 <div class="stat-card">
                     <div style="font-size: 2em;">🎨</div>
@@ -711,7 +762,7 @@ function generatePersonAnalysis(person, personNum, totalPeople) {
                 </div>
                 <div class="stat-card">
                     <div style="font-size: 2em;">✨</div>
-                    <div style="margin-top: 10px; font-size: 1.2em;">${overallConf > 0 ? overallConf.toFixed(0) + '%' : 'N/A'}</div>
+                    <div style="margin-top: 10px; font-size: 1.2em;">${overallConfPct > 0 ? overallConfPct + '%' : 'N/A'}</div>
                     <div style="font-size: 0.9em; opacity: 0.8;">Confidence</div>
                 </div>
             </div>
@@ -719,7 +770,19 @@ function generatePersonAnalysis(person, personNum, totalPeople) {
             ${person.best_colors ? `
                 <div style="margin-top: 25px; padding: 20px; background: linear-gradient(135deg, ${personNum === 1 ? '#667eea' : '#764ba2'} 0%, ${personNum === 1 ? '#764ba2' : '#9b59b6'} 100%); border-radius: 12px; color: white;">
                     <h4 style="color: white; margin-bottom: 15px; font-size: 1.3em;">✨ Best Colors for Person ${personNum}</h4>
-                    
+                    ${person.clothing_feedback && person.clothing_color ? `
+                        <div style="background:#ffffff; color:#333; padding:16px; border-radius:10px; margin-bottom:16px; border-left:5px solid ${person.clothing_feedback.quality === 'excellent' ? '#10b981' : (person.clothing_feedback.quality === 'good' ? '#3b82f6' : '#ef4444')};">
+                            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+                                <div style="font-weight:600;">👗 Outfit Color Feedback</div>
+                                <div style="display:flex; gap:8px;">
+                                    <div title="Detected" style="width:24px; height:24px; border-radius:6px; border:2px solid #ddd; background:${person.clothing_color.hex}"></div>
+                                    ${person.clothing_feedback.closest_recommendation ? `<div title="Closest recommended" style="width:24px; height:24px; border-radius:6px; border:2px solid #ddd; background:${person.clothing_feedback.closest_recommendation.hex || '#ccc'}"></div>` : ''}
+                                </div>
+                            </div>
+                            <div style="margin-top:8px; font-size:0.95em;">${person.clothing_feedback.message}</div>
+                            ${person.clothing_feedback.closest_recommendation ? `<div style="margin-top:6px; font-size:0.85em; color:#666;">Closest recommended: <strong>${person.clothing_feedback.closest_recommendation.color_name || person.clothing_feedback.closest_recommendation.name}</strong> • ΔE ${Number(person.clothing_feedback.delta_e || 0).toFixed(1)}</div>` : ''}
+                        </div>
+                    ` : ''}
                     ${person.best_colors.excellent && person.best_colors.excellent.length > 0 ? `
                         <div style="background: rgba(255,255,255,0.95); padding: 15px; border-radius: 10px; margin-bottom: 15px;">
                             <h5 style="color: #d63384; margin-bottom: 12px;">🌟 EXCELLENT MATCHES</h5>
@@ -753,174 +816,7 @@ function generatePersonAnalysis(person, personNum, totalPeople) {
     `;
 }
 
-// ============ WARDROBE TAB ============
-async function addWardrobeItem() {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.onchange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        
-        showLoading('Adding to wardrobe...', 'Analyzing clothing item');
-        
-        const formData = new FormData();
-        formData.append('image', file);
-        formData.append('category', 'general');
-        formData.append('name', file.name);
-        
-        try {
-            const response = await fetch('/api/extended/wardrobe/add', {
-                method: 'POST',
-                body: formData
-            });
-            
-            if (response.ok) {
-                const result = await response.json();
-                appState.wardrobeItems.push(result);
-                appState.analytics.wardrobeItems++;
-                hideLoading();
-                await loadWardrobe();
-                alert('✅ Item added successfully!');
-            } else {
-                throw new Error('Failed to add item');
-            }
-        } catch (error) {
-            console.error('Error:', error);
-            hideLoading();
-            alert('Failed to add item: ' + error.message);
-        }
-    };
-    input.click();
-}
-
-async function loadWardrobe() {
-    try {
-        const response = await fetch('/api/extended/wardrobe/items');
-        if (response.ok) {
-            const data = await response.json();
-            appState.wardrobeItems = data.items || data.wardrobe_items || [];
-            displayWardrobe();
-            updateWardrobeStats();
-        } else {
-            // Endpoint might not exist, use empty array
-            appState.wardrobeItems = [];
-            displayWardrobe();
-        }
-    } catch (error) {
-        console.error('Error loading wardrobe:', error);
-        appState.wardrobeItems = [];
-        displayWardrobe();
-    }
-}
-
-function displayWardrobe() {
-    if (appState.wardrobeItems.length === 0) {
-        elements.wardrobeGrid.innerHTML = '<p style="color: #999; text-align: center; padding: 40px;">No items yet. Add your first clothing item!</p>';
-        return;
-    }
-    
-    const html = appState.wardrobeItems.map(item => `
-        <div class="wardrobe-item" data-id="${item.item_id}">
-            <img src="${item.image_url || '/static/placeholder.jpg'}" alt="${item.name}">
-            <div class="wardrobe-item-info">
-                <h4>${item.name || 'Clothing Item'}</h4>
-                <p style="font-size: 0.9em; color: #666;">${item.category || 'General'}</p>
-                <div style="margin-top: 10px;">
-                    ${item.dominant_color ? `<span style="display: inline-block; width: 30px; height: 30px; border-radius: 50%; background-color: ${item.dominant_color}; border: 2px solid #ddd;"></span>` : ''}
-                </div>
-            </div>
-        </div>
-    `).join('');
-    
-    elements.wardrobeGrid.innerHTML = html;
-}
-
-function updateWardrobeStats() {
-    document.getElementById('totalItems').textContent = appState.wardrobeItems.length;
-    document.getElementById('totalOutfits').textContent = appState.savedOutfits.length;
-}
-
-async function generateOutfits() {
-    if (appState.wardrobeItems.length < 2) {
-        alert('Add at least 2 items to your wardrobe to generate outfits!');
-        return;
-    }
-    
-    showLoading('Generating outfits...', 'Finding perfect combinations');
-    
-    try {
-        const response = await fetch('/api/extended/wardrobe/outfits/generate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ occasion: 'casual' })
-        });
-        
-        if (response.ok) {
-            const result = await response.json();
-            hideLoading();
-            displayOutfits(result.outfits || []);
-        } else {
-            throw new Error('Failed to generate outfits');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        hideLoading();
-        alert('✅ Feature Available! Backend configured at:\n/api/extended/wardrobe/outfits/generate\n\nAdd more items to your wardrobe to see outfit combinations!');
-    }
-}
-
-function displayOutfits(outfits) {
-    if (outfits.length === 0) {
-        alert('No compatible outfits found. Try adding more items!');
-        return;
-    }
-    
-    const html = outfits.map((outfit, idx) => `
-        <div class="outfit-combination">
-            <h4>Outfit ${idx + 1}</h4>
-            <p style="color: #666; margin: 10px 0;">${outfit.description || 'Perfect combination for any occasion'}</p>
-            <span class="compatibility-badge compatibility-excellent">
-                ✨ ${outfit.compatibility_score ? (outfit.compatibility_score * 100).toFixed(0) + '% Compatible' : 'Excellent Match'}
-            </span>
-            <div class="outfit-items">
-                ${outfit.items.map(item => `
-                    <div style="text-align: center;">
-                        <div style="width: 100px; height: 100px; background: ${item.color || '#ccc'}; border-radius: 10px; margin-bottom: 5px;"></div>
-                        <p style="font-size: 0.9em;">${item.name || item.category}</p>
-                    </div>
-                `).join('')}
-            </div>
-        </div>
-    `).join('');
-    
-    elements.outfitsContainer.innerHTML = html;
-    elements.outfitSuggestions.classList.remove('hidden');
-}
-
-async function analyzeWardrobe() {
-    showLoading('Analyzing wardrobe...', 'Calculating color harmony and compatibility');
-    
-    try {
-        const response = await fetch('/api/extended/wardrobe/analyze');
-        if (response.ok) {
-            const result = await response.json();
-            hideLoading();
-            
-            const avgScore = result.average_compatibility || 0;
-            document.getElementById('avgCompatibility').textContent = (avgScore * 100).toFixed(0) + '%';
-            
-            alert(`Wardrobe Analysis:\n\n` +
-                  `Total Items: ${result.total_items || 0}\n` +
-                  `Average Compatibility: ${(avgScore * 100).toFixed(0)}%\n` +
-                  `Most Common Color: ${result.dominant_color_family || 'N/A'}\n` +
-                  `Recommendations: ${result.recommendations || 'Keep building your collection!'}`);
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        hideLoading();
-    }
-}
+// (Wardrobe feature removed)
 
 // ============ COLORS TAB ============
 async function loadMonkScaleData() {
@@ -1192,26 +1088,26 @@ async function compareColorsNow() {
 }
 
 function showSeasonalPalette() {
-    const seasons = {
-        'Spring': ['#FFB6C1', '#98FB98', '#FFD700', '#87CEEB'],
-        'Summer': ['#ADD8E6', '#F0E68C', '#DDA0DD', '#F5DEB3'],
-        'Autumn': ['#D2691E', '#8B4513', '#FF8C00', '#DAA520'],
-        'Winter': ['#000080', '#800020', '#4B0082', '#FFFFFF']
-    };
-    
-    const html = Object.entries(seasons).map(([season, colors]) => `
+    if (!appState.currentAnalysis) return;
+    const data = appState.currentAnalysis.data || appState.currentAnalysis;
+    const advice = (data.fashion_advice || {}).seasonal_palette || {};
+    const seasons = ['spring','summer','fall','winter'];
+    const html = seasons.map(season => {
+        const colors = advice[season] || [];
+        if (!colors.length) return '';
+        return `
         <div style="margin: 20px 0;">
-            <h4>${season} Palette</h4>
+            <h4>${season.charAt(0).toUpperCase() + season.slice(1)} Palette</h4>
             <div class="color-palette">
-                ${colors.map(color => `
-                    <div class="color-swatch" style="background-color: ${color};"></div>
+                ${colors.map(c => `
+                    <div class="color-swatch" title="${c.name}" style="background-color: ${c.hex};"></div>
                 `).join('')}
             </div>
-        </div>
-    `).join('');
-    
-    document.getElementById('colorComparison').innerHTML = html;
-    document.getElementById('colorComparison').classList.remove('hidden');
+        </div>`;
+    }).join('');
+    const el = document.getElementById('colorComparison');
+    el.innerHTML = html || '<p>No seasonal palette available for this analysis.</p>';
+    el.classList.remove('hidden');
 }
 
 // ============ AI ADVICE TAB ============
@@ -1239,7 +1135,6 @@ async function getAIFashionAdviceFromAnalysis(analysisData) {
         if (response.ok) {
             const result = await response.json();
             updateProgress(100);
-            appState.analytics.aiRequests++;
             
             setTimeout(() => {
                 hideLoading();
@@ -1284,7 +1179,6 @@ async function getAIFashionAdvice() {
         if (response.ok) {
             const result = await response.json();
             updateProgress(100);
-            appState.analytics.aiRequests++;
             
             setTimeout(() => {
                 hideLoading();
@@ -1359,103 +1253,10 @@ function applyARColor(colorRGB) {
     alert(`Applying color: RGB(${colorRGB})\nThis is a demo - full AR implementation requires additional processing.`);
 }
 
-// ============ SHOPPING TAB ============
-async function searchProducts() {
-    const category = elements.shopCategory.value;
-    const gender = elements.shopGender.value;
-    const color = elements.shopColor.value;
-    
-    showLoading('Searching products...', 'Finding best matches from Amazon & Flipkart');
-    
-    try {
-        const response = await fetch('/api/extended/shopping/search', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ category, gender, preferred_color: color })
-        });
-        
-        if (response.ok) {
-            const result = await response.json();
-            hideLoading();
-            displayProducts(result.products || []);
-        } else {
-            throw new Error('Product search failed');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        hideLoading();
-        // Show demo products instead
-        displayProducts([
-            { name: 'Cotton Shirt', price: '₹999', platform: 'Amazon', image: '', url: '#' },
-            { name: 'Silk Saree', price: '₹2499', platform: 'Flipkart', image: '', url: '#' }
-        ]);
-    }
-}
-
-function displayProducts(products) {
-    if (products.length === 0) {
-        alert('No products found. Try different filters!');
-        return;
-    }
-    
-    const html = products.map(product => `
-        <div class="wardrobe-item">
-            <div style="width: 100%; height: 200px; background: #f5f5f5; display: flex; align-items: center; justify-content: center;">
-                ${product.image ? `<img src="${product.image}" style="max-width: 100%; max-height: 100%;">` : '🛍️'}
-            </div>
-            <div class="wardrobe-item-info">
-                <h4>${product.name}</h4>
-                <p style="color: #4CAF50; font-weight: bold;">${product.price || 'Price on request'}</p>
-                <p style="font-size: 0.9em; color: #666;">${product.platform || 'Online'}</p>
-                <a href="${product.url || '#'}" target="_blank" class="btn btn-outline" style="display: inline-block; margin-top: 10px; padding: 8px 15px; font-size: 0.9em;">View Product</a>
-            </div>
-        </div>
-    `).join('');
-    
-    elements.productsContainer.innerHTML = html;
-    elements.productsGrid.classList.remove('hidden');
-}
+// (Shopping feature removed)
 
 // ============ ANALYTICS TAB ============
-function loadAnalytics() {
-    // Update stats from app state
-    document.getElementById('totalAnalyses').textContent = appState.analytics.totalAnalyses;
-    document.getElementById('wardrobeValue').textContent = appState.analytics.wardrobeItems;
-    document.getElementById('co2Saved').textContent = (appState.analytics.wardrobeItems * 2.5).toFixed(1) + ' kg';
-    document.getElementById('aiRequests').textContent = appState.analytics.aiRequests;
-}
-
-async function downloadPDFReport() {
-    showLoading('Generating PDF report...', 'Compiling your fashion analytics');
-    
-    try {
-        const response = await fetch('/api/extended/reports/generate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                user_data: appState.currentAnalysis,
-                wardrobe_stats: { total_items: appState.wardrobeItems.length }
-            })
-        });
-        
-        if (response.ok) {
-            const blob = await response.blob();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'VastraVista_Report.pdf';
-            a.click();
-            hideLoading();
-            alert('✅ Report downloaded successfully!');
-        } else {
-            throw new Error('Failed to generate report');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        hideLoading();
-        alert('Report generation is currently unavailable. Try again later!');
-    }
-}
+// (Analytics feature removed)
 
 // ============ UTILITY FUNCTIONS ============
 function showLoading(title, subtitle) {
@@ -1490,10 +1291,7 @@ function shouldUseDarkText(rgb) {
 }
 
 // Helper functions for buttons in dynamically generated content
-function saveToWardrobe() {
-    if (!appState.currentAnalysis) return;
-    alert('Analysis saved to profile! You can now generate personalized outfit recommendations.');
-}
+// (Wardrobe save removed)
 
 function getDetailedAIAdvice() {
     if (!appState.currentAnalysis) {
@@ -1553,12 +1351,7 @@ function copyToClipboard(hex) {
     });
 }
 
-// Initialize wardrobe on load - wrapped in try-catch
-try {
-    loadWardrobe();
-} catch (error) {
-    console.warn('Could not load wardrobe on init:', error);
-}
+// (Wardrobe init removed)
 
 // Global error handler
 window.addEventListener('error', (event) => {
@@ -1574,3 +1367,24 @@ window.addEventListener('unhandledrejection', (event) => {
 });
 
 console.log('🎨 VastraVista 3.0 initialized successfully!');
+function handleAnalyzedImageError(img) {
+    const backendPath = img.getAttribute('data-backend') || '';
+    const fileName = backendPath ? backendPath.split('/').pop() : '';
+    if (fileName && img.dataset.fallbackTried !== '1') {
+        img.dataset.fallbackTried = '1';
+        img.src = '/uploads/' + fileName;
+        return;
+    }
+    img.style.display = 'none';
+    const parent = img.parentElement;
+    if (parent) {
+        parent.innerHTML = '<div style="text-align:center; color:#667eea; font-weight:600;">Image unavailable</div>';
+    }
+}
+function getGradientByConfidence(pct) {
+    const p = Number(pct || 0);
+    if (p >= 80) return 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+    if (p >= 60) return 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)';
+    if (p >= 40) return 'linear-gradient(135deg, #f59e0b 0%, #f97316 100%)';
+    return 'linear-gradient(135deg, #94a3b8 0%, #64748b 100%)';
+}

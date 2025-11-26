@@ -28,7 +28,7 @@ class ARColorDraping:
         self.mp_face_mesh = mp.solutions.face_mesh
         self.face_mesh = self.mp_face_mesh.FaceMesh(
             static_image_mode=True,
-            max_num_faces=1,
+            max_num_faces=5,
             min_detection_confidence=0.5
         )
         
@@ -115,6 +115,131 @@ class ARColorDraping:
         except Exception as e:
             self.logger.error(f"Color draping failed: {e}")
             return cv2.imread(image_path) if image_path else None
+
+    def extract_dominant_clothing_color(self, image_path: str, region: str = 'collar') -> Dict:
+        try:
+            image = cv2.imread(image_path)
+            if image is None:
+                return {}
+            image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            results = self.face_mesh.process(image_rgb)
+            if not results.multi_face_landmarks:
+                return {}
+            face_landmarks = results.multi_face_landmarks[0]
+            h, w, _ = image.shape
+            mask = np.zeros((h, w), dtype=np.uint8)
+            regions = ['collar', 'shoulder_left', 'shoulder_right'] if region == 'all' else [region]
+            for reg in regions:
+                landmarks_idx = self.draping_landmarks.get(reg, [])
+                points = []
+                for idx in landmarks_idx:
+                    lm = face_landmarks.landmark[idx]
+                    x = int(lm.x * w)
+                    y = int(lm.y * h)
+                    points.append([x, y])
+                if points:
+                    pts = np.array(points, dtype=np.int32)
+                    cv2.fillPoly(mask, [pts], 255)
+            mask = self._expand_draping_mask(mask, image.shape)
+            pixels = image_rgb[mask > 0]
+            if pixels.size == 0:
+                return {}
+            Z = pixels.reshape(-1, 3).astype(np.float32)
+            criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
+            K = 3
+            ret, labels, centers = cv2.kmeans(Z, K, None, criteria, 3, cv2.KMEANS_PP_CENTERS)
+            counts = np.bincount(labels.flatten())
+            idx = int(np.argmax(counts))
+            dominant = centers[idx].astype(np.int32).tolist()
+            rgb = (int(dominant[0]), int(dominant[1]), int(dominant[2]))
+            from app.services.color_analyzer import ColorAnalyzer
+            from app.utils.color_utils import rgb_to_hex, calculate_color_distance
+            analyzer = ColorAnalyzer()
+            nearest = None
+            best_delta = 1e9
+            for name, data in analyzer.fashion_colors.items():
+                d = calculate_color_distance(rgb, tuple(data['rgb']))
+                if d < best_delta:
+                    best_delta = d
+                    nearest = {
+                        'color_name': name,
+                        'rgb': data['rgb'],
+                        'hex': data['hex'],
+                        'delta_e': float(d)
+                    }
+            return {
+                'rgb': list(rgb),
+                'hex': rgb_to_hex(rgb),
+                'nearest_fashion_color': nearest,
+                'region': region
+            }
+        except Exception:
+            return {}
+
+    def extract_clothing_color_for_bbox(self, image_path: str, bbox: Tuple[int, int, int, int], region: str = 'collar') -> Dict:
+        try:
+            image = cv2.imread(image_path)
+            if image is None:
+                return {}
+            x1, y1, x2, y2 = bbox
+            x1 = max(0, x1); y1 = max(0, y1); x2 = min(image.shape[1], x2); y2 = min(image.shape[0], y2)
+            roi = image[y1:y2, x1:x2]
+            if roi is None or roi.size == 0:
+                return {}
+            roi_rgb = cv2.cvtColor(roi, cv2.COLOR_BGR2RGB)
+            results = self.face_mesh.process(roi_rgb)
+            if not results.multi_face_landmarks:
+                return {}
+            h, w, _ = roi.shape
+            mask = np.zeros((h, w), dtype=np.uint8)
+            regions = ['collar', 'shoulder_left', 'shoulder_right'] if region == 'all' else [region]
+            face_landmarks = results.multi_face_landmarks[0]
+            for reg in regions:
+                landmarks_idx = self.draping_landmarks.get(reg, [])
+                points = []
+                for idx in landmarks_idx:
+                    lm = face_landmarks.landmark[idx]
+                    x = int(lm.x * w)
+                    y = int(lm.y * h)
+                    points.append([x, y])
+                if points:
+                    pts = np.array(points, dtype=np.int32)
+                    cv2.fillPoly(mask, [pts], 255)
+            mask = self._expand_draping_mask(mask, roi.shape)
+            pixels = roi_rgb[mask > 0]
+            if pixels.size == 0:
+                return {}
+            Z = pixels.reshape(-1, 3).astype(np.float32)
+            criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
+            K = 3
+            ret, labels, centers = cv2.kmeans(Z, K, None, criteria, 3, cv2.KMEANS_PP_CENTERS)
+            counts = np.bincount(labels.flatten())
+            idx = int(np.argmax(counts))
+            dominant = centers[idx].astype(np.int32).tolist()
+            rgb = (int(dominant[0]), int(dominant[1]), int(dominant[2]))
+            from app.services.color_analyzer import ColorAnalyzer
+            from app.utils.color_utils import rgb_to_hex, calculate_color_distance
+            analyzer = ColorAnalyzer()
+            nearest = None
+            best_delta = 1e9
+            for name, data in analyzer.fashion_colors.items():
+                d = calculate_color_distance(rgb, tuple(data['rgb']))
+                if d < best_delta:
+                    best_delta = d
+                    nearest = {
+                        'color_name': name,
+                        'rgb': data['rgb'],
+                        'hex': data['hex'],
+                        'delta_e': float(d)
+                    }
+            return {
+                'rgb': [rgb[0], rgb[1], rgb[2]],
+                'hex': rgb_to_hex(rgb),
+                'nearest_fashion_color': nearest,
+                'region': region
+            }
+        except Exception:
+            return {}
     
     def _expand_draping_mask(self, mask: np.ndarray, image_shape: Tuple) -> np.ndarray:
         """Expand mask to cover typical clothing draping area"""

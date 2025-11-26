@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Sign Up{% endblock %}
+{% block content %}
+<div class="container py-5" style="max-width: 520px;">
+  <div class="glass-card p-4">
+    <h2 class="mb-3">Sign Up</h2>
+    <form method="POST" action="{{ url_for('auth.signup') }}" id="signupForm">
+      <div class="mb-3">
+        <label class="form-label">Email</label>
+        <input type="email" name="email" class="form-control" required />
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Username</label>
+        <input type="text" name="username" class="form-control" required />
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Password</label>
+        <div class="input-group">
+          <input type="password" name="password" class="form-control" id="signupPassword" required />
+          <button class="btn btn-outline-secondary" type="button" id="toggleSignupPassword" aria-label="Show password">Show</button>
+        </div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Region</label>
+        <select name="region" class="form-select" aria-label="Select region">
+          <option value="" selected>Choose...</option>
+          <option value="in">India</option>
+          <option value="us">United States</option>
+          <option value="eu">Europe</option>
+        </select>
+      </div>
+      <button type="submit" class="btn btn-success w-100">Create Account</button>
+    </form>
+    <div class="mt-3 text-center">
+      <a href="{{ url_for('auth.login') }}">Already have an account? Login</a>
+    </div>
+  </div>
+</div>
+<script>
+  const toggleSignupPassword = document.getElementById('toggleSignupPassword');
+  const signupPassword = document.getElementById('signupPassword');
+  toggleSignupPassword.addEventListener('click', () => {
+    const isPwd = signupPassword.type === 'password';
+    signupPassword.type = isPwd ? 'text' : 'password';
+    toggleSignupPassword.textContent = isPwd ? 'Hide' : 'Show';
+    toggleSignupPassword.setAttribute('aria-label', isPwd ? 'Hide password' : 'Show password');
+  });
+</script>
+{% endblock %}

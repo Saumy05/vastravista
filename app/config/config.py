@@ -47,9 +47,17 @@ class Config:
     CACHE_DEFAULT_TIMEOUT = 300
     
     # Database
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
-        'sqlite:///' + str(BASE_DIR / 'data' / 'vastravista.db')
+    _env_db = os.environ.get('DATABASE_URL', '')
+    if _env_db.startswith('sqlite:///'):
+        _p = _env_db.replace('sqlite:///', '')
+        if os.path.isabs(_p):
+            SQLALCHEMY_DATABASE_URI = _env_db
+        else:
+            SQLALCHEMY_DATABASE_URI = 'sqlite:///' + str((BASE_DIR / _p).resolve())
+    else:
+        SQLALCHEMY_DATABASE_URI = _env_db or 'sqlite:///' + str(BASE_DIR / 'data' / 'vastravista.db')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    
     
     # Affiliate API Configuration
     AMAZON_AFFILIATE_ID = os.environ.get('AMAZON_AFFILIATE_ID', '')
@@ -62,8 +70,8 @@ class Config:
     CUELINKS_API_KEY = os.environ.get('CUELINKS_API_KEY', '')
     
     # Feature flags
-    ENABLE_WARDROBE = True
+    ENABLE_WARDROBE = False
     ENABLE_AR_FEATURES = True
-    ENABLE_AFFILIATE_RECOMMENDATIONS = True
-    ENABLE_PDF_REPORTS = True
+    ENABLE_AFFILIATE_RECOMMENDATIONS = False
+    ENABLE_PDF_REPORTS = False
     ENABLE_STYLE_QUIZ = True

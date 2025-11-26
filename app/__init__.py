@@ -1,10 +1,12 @@
 """
-VastraVista Application Factory
+Application Factory (Auth-only)
+Sets up Flask app, loads environment, configures logging, DB, and auth.
 """
 
 from flask import Flask, redirect
 from flask_cors import CORS
 from pathlib import Path
+from dotenv import load_dotenv
 
 # Import centralized logging configuration
 from app.config.logging_config import setup_production_logging, configure_app_logging
@@ -22,6 +24,10 @@ def create_app(config_name='development'):
     app = Flask(__name__,
                 static_folder='../static',
                 template_folder='../templates')
+    try:
+        load_dotenv(dotenv_path=Path(__file__).parent.parent / '.env')
+    except Exception:
+        pass
     
     # Load configuration
     if config_name == 'production':
@@ -37,6 +43,15 @@ def create_app(config_name='development'):
     # Setup logging
     configure_app_logging(app)
     
+    # Create required directories early
+    try:
+        from pathlib import Path as _P
+        for folder_config in ['DATA_DIR', 'UPLOAD_FOLDER', 'WARDROBE_FOLDER', 'REPORT_FOLDER']:
+            folder = _P(app.config.get(folder_config, 'data'))
+            folder.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+
     # Initialize database
     try:
         from app.models.database import db
@@ -46,15 +61,24 @@ def create_app(config_name='development'):
         with app.app_context():
             db.create_all()
             app.logger.info('✅ Database initialized')
+            try:
+                from sqlalchemy import inspect, text
+                inspector = inspect(db.engine)
+                cols = [c['name'] for c in inspector.get_columns('users')]
+                with db.engine.connect() as conn:
+                    if 'is_verified' not in cols:
+                        conn.execute(text('ALTER TABLE users ADD COLUMN is_verified BOOLEAN DEFAULT 0'))
+                app.logger.info('✅ Users table schema ensured')
+            except Exception as e:
+                app.logger.warning(f'⚠️ Could not ensure users schema: {e}')
     except ImportError:
         app.logger.warning('⚠️ Database models not available - running without database')
     
-    # Initialize Flask-Login
     try:
         from flask_login import LoginManager
         login_manager = LoginManager()
         login_manager.init_app(app)
-        login_manager.login_view = 'api.login'
+        login_manager.login_view = 'auth.login'
         
         @login_manager.user_loader
         def load_user(user_id):
@@ -63,37 +87,15 @@ def create_app(config_name='development'):
     except ImportError:
         app.logger.warning('⚠️ Flask-Login not available')
     
-    # Register blueprints
-    from app.api.routes import api_bp
-    app.register_blueprint(api_bp, url_prefix='/api')
-    
-    # Register extended features blueprint
-    try:
-        from app.api.extended_routes import extended_bp
-        app.register_blueprint(extended_bp, url_prefix='/api/extended')
-        app.logger.info('✅ Extended features enabled')
-    except ImportError as e:
-        app.logger.warning(f'⚠️ Extended features not available: {e}')
-    
-    # Register AI-powered routes (Monk Scale + OpenRouter DeepSeek R1)
-    try:
-        from app.api.ai_routes import ai_bp
-        app.register_blueprint(ai_bp)
-        app.logger.info('✅ AI-powered features enabled (Monk Scale + DeepSeek R1)')
-    except ImportError as e:
-        app.logger.warning(f'⚠️ AI features not available: {e}')
+    from app.api.auth import auth_bp
+    app.register_blueprint(auth_bp)
     
     # Add root route redirect
     @app.route('/')
     def root():
-        """Redirect root to main page"""
-        return redirect('/api/')
+        from flask import url_for
+        return redirect(url_for('auth.login'))
     
-    # Create required directories
-    for folder_config in ['UPLOAD_FOLDER', 'WARDROBE_FOLDER', 'REPORT_FOLDER']:
-        folder = Path(app.config.get(folder_config, 'data'))
-        folder.mkdir(parents=True, exist_ok=True)
-    
-    app.logger.info('✅ VastraVista application initialized with all features')
+    app.logger.info('✅ Auth-only application initialized')
     
     return app

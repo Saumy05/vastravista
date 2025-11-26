@@ -860,12 +860,6 @@
                 <span class="feature-badge">NEW</span>
             </div>
 
-            <div class="feature-card" data-feature="wardrobe">
-                <div class="feature-icon">👔</div>
-                <h3>Digital Wardrobe</h3>
-                <p>Manage your clothing items with AI color analysis and get smart outfit combinations</p>
-                <span class="feature-badge">AI</span>
-            </div>
 
             <div class="feature-card" data-feature="colors">
                 <div class="feature-icon">🎨</div>
@@ -888,12 +882,6 @@
                 <span class="feature-badge">BETA</span>
             </div>
 
-            <div class="feature-card" data-feature="shopping">
-                <div class="feature-icon">🛍️</div>
-                <h3>Smart Shopping</h3>
-                <p>Get product recommendations from Amazon & Flipkart based on your color profile</p>
-                <span class="feature-badge">INDIA</span>
-            </div>
         </div>
 
         <!-- Main Content Area -->
@@ -901,16 +889,12 @@
             <!-- Navigation Tabs -->
             <div class="tabs">
                 <button class="tab active" data-tab="analyze">📸 Analysis</button>
-                <button class="tab" data-tab="wardrobe">👔 Wardrobe</button>
                 <button class="tab" data-tab="colors">🎨 Colors</button>
                 <button class="tab" data-tab="ai-advice">🤖 AI Stylist</button>
                 <button class="tab" data-tab="ar">✨ AR Try-On</button>
-                <button class="tab" data-tab="shopping">🛍️ Shopping</button>
-                <button class="tab" data-tab="analytics">📊 Analytics</button>
             </div>
 
             <!-- Tab Contents (keeping your existing structure) -->
-            
             <!-- Analysis Tab -->
             <div class="tab-content active" id="analyze">
                 <h2>📸 Smart Skin Tone Analysis</h2>
@@ -937,50 +921,13 @@
                     <button class="btn btn-outline" id="stopCamera" style="display: none;">🛑 Stop Camera</button>
                 </div>
 
-                <div id="analysisResults" class="hidden" style="margin-top: 40px;">
-                    <!-- Results will be populated here -->
-                </div>
+                <div id="analysisResults" class="hidden" style="margin-top: 40px;"></div>
             </div>
+            
 
             <!-- [Rest of your tab content remains the same - just keeping the structure] -->
             <!-- I've kept the remaining tabs structure identical to preserve your functionality -->
             
-            <!-- Wardrobe Tab -->
-            <div class="tab-content" id="wardrobe">
-                <h2>👔 Digital Wardrobe Manager</h2>
-                <p style="color: #666; margin-bottom: 20px;">Manage your clothing items and get AI-powered outfit recommendations</p>
-
-                <div style="margin-bottom: 30px;">
-                    <button class="btn btn-primary" id="addWardrobeItem">➕ Add Clothing Item</button>
-                    <button class="btn btn-secondary" id="generateOutfits">✨ Generate Outfits</button>
-                    <button class="btn btn-outline" id="analyzeWardrobe">📊 Analyze Wardrobe</button>
-                </div>
-
-                <div id="wardrobeStats" class="stats-grid" style="margin-bottom: 30px;">
-                    <div class="stat-card">
-                        <div class="stat-number" id="totalItems">0</div>
-                        <div>Total Items</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number" id="totalOutfits">0</div>
-                        <div>Saved Outfits</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number" id="avgCompatibility">N/A</div>
-                        <div>Avg Compatibility</div>
-                    </div>
-                </div>
-
-                <h3>Your Wardrobe Items</h3>
-                <div class="wardrobe-grid" id="wardrobeGrid">
-                    <p style="color: #999; text-align: center; padding: 40px;">No items yet. Add your first clothing item!</p>
-                </div>
-
-                <div id="outfitSuggestions" class="hidden" style="margin-top: 40px;">
-                    <h3>🎯 Outfit Suggestions</h3>
-                    <div id="outfitsContainer"></div>
-                </div>
-            </div>
 
              <!-- Colors Tab -->
             <div class="tab-content" id="colors">
@@ -1119,88 +1066,8 @@
             </div>
 
 
-            <!-- Shopping Tab -->
-            <div class="tab-content" id="shopping">
-                <h2>🛍️ Smart Shopping Assistant</h2>
-                <p style="color: #666; margin-bottom: 30px;">Get personalized product recommendations from Amazon & Flipkart</p>
 
 
-                <div style="background: #f8f9ff; padding: 25px; border-radius: 15px; margin-bottom: 30px;">
-                    <h3>Search for Products</h3>
-                    
-                    <div style="margin: 20px 0;">
-                        <label style="display: block; margin-bottom: 10px; font-weight: 600;">Category:</label>
-                        <select id="shopCategory" style="padding: 12px; border: 2px solid #ddd; border-radius: 8px; width: 100%; max-width: 300px;">
-                            <option value="shirt">Shirts</option>
-                            <option value="dress">Dresses</option>
-                            <option value="pants">Pants</option>
-                            <option value="kurta">Kurtas</option>
-                            <option value="saree">Sarees</option>
-                            <option value="jacket">Jackets</option>
-                            <option value="accessories">Accessories</option>
-                        </select>
-                    </div>
-
-
-                    <div style="margin: 20px 0;">
-                        <label style="display: block; margin-bottom: 10px; font-weight: 600;">Gender:</label>
-                        <select id="shopGender" style="padding: 12px; border: 2px solid #ddd; border-radius: 8px; width: 100%; max-width: 300px;">
-                            <option value="both">All</option>
-                            <option value="male">Male</option>
-                            <option value="female">Female</option>
-                        </select>
-                    </div>
-
-
-                    <div style="margin: 20px 0;">
-                        <label style="display: block; margin-bottom: 10px; font-weight: 600;">Preferred Color (optional):</label>
-                        <input type="text" id="shopColor" placeholder="#667eea or blue" 
-                               style="padding: 12px; border: 2px solid #ddd; border-radius: 8px; width: 100%; max-width: 300px;">
-                    </div>
-
-
-                    <button class="btn btn-primary" id="searchProducts">🔍 Search Products</button>
-                </div>
-
-
-                <div id="productsGrid" class="hidden">
-                    <h3>Product Recommendations</h3>
-                    <div id="productsContainer" class="wardrobe-grid"></div>
-                </div>
-            </div>
-
-
-            <!-- Analytics Tab -->
-            <div class="tab-content" id="analytics">
-                <h2>📊 Your Fashion Analytics</h2>
-                <p style="color: #666; margin-bottom: 30px;">Track your usage and insights</p>
-
-
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-number" id="totalAnalyses">0</div>
-                        <div>Total Analyses</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number" id="wardrobeValue">0</div>
-                        <div>Wardrobe Items</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number" id="co2Saved">0 kg</div>
-                        <div>CO₂ Saved</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number" id="aiRequests">0</div>
-                        <div>AI Consultations</div>
-                    </div>
-                </div>
-
-
-                <div style="margin-top: 40px;">
-                    <button class="btn btn-primary" id="refreshAnalytics">🔄 Refresh Analytics</button>
-                    <button class="btn btn-secondary" id="downloadReport">📄 Download PDF Report</button>
-                </div>
-            </div>
 
 
         </div>

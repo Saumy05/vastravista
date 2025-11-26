@@ -258,21 +258,15 @@ class FashionRecommendationEngine:
     
     def _get_complementary_color(self, primary_color: Dict, 
                                  available_colors: List[Dict]) -> Dict:
-        """Get complementary color for outfit"""
-        # Look for neutral colors or colors from different families
-        neutrals = ['White', 'Black', 'Gray', 'Beige', 'Navy', 'Cream']
-        
-        for color in available_colors:
-            if color['color_name'] in neutrals and color != primary_color:
-                return color
-        
-        # If no neutral found, return different color family
-        for color in available_colors:
-            if color['family'] != primary_color['family'] and color != primary_color:
-                return color
-        
-        # Fallback
-        return available_colors[0] if available_colors else primary_color
+        brightness = lambda rgb: (rgb[0] + rgb[1] + rgb[2]) / 3.0
+        if not available_colors:
+            return primary_color
+        candidates = [c for c in available_colors if c != primary_color]
+        if not candidates:
+            return primary_color
+        pb = brightness(primary_color['rgb'])
+        candidates.sort(key=lambda c: (abs(brightness(c['rgb']) - pb), c['family'] != primary_color['family']), reverse=True)
+        return candidates[0]
     
     def _get_styling_note(self, outfit: Dict, gender: str, 
                          age_group: str, occasion: str) -> str:
