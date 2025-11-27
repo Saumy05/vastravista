@@ -97,6 +97,11 @@
             animation: shimmer 3s ease-in-out infinite;
         }
 
+        @keyframes typing {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
         @keyframes shimmer {
             0%, 100% { filter: brightness(1); }
             50% { filter: brightness(1.2); }
@@ -236,7 +241,7 @@
             animation: fadeIn 1s ease-out 0.3s backwards;
         }
 
-        /* Modern Tabs with Pill Design */
+        /* Modern Tabs with Pill Design - Sticky */
         .tabs {
             display: flex;
             gap: 12px;
@@ -246,6 +251,24 @@
             overflow-x: auto;
             scrollbar-width: thin;
             scrollbar-color: rgba(102, 126, 234, 0.3) transparent;
+            transition: all 0.3s ease;
+        }
+        
+        .sticky-tabs {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            padding: 15px 20px;
+            margin: -15px -20px 25px -20px;
+            border-radius: 0 0 20px 20px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+        
+        .sticky-tabs.scrolled {
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
         }
 
         .tabs::-webkit-scrollbar {
@@ -844,6 +867,11 @@
             <div class="header-content">
                 <h1>🎨 VastraVista 3.0</h1>
                 <p>AI-Powered Fashion Intelligence Platform</p>
+                {% if user and user.is_authenticated %}
+                <p style="margin-top: 10px; font-size: 1.1em; color: #667eea; font-weight: 600;">
+                    Welcome back, {{ user.username }}! 👋
+                </p>
+                {% endif %}
                 <span class="version-badge">
                     <span>⚡</span>
                     Monk Scale + DeepSeek R1 + Delta-E CIE2000
@@ -886,12 +914,13 @@
 
         <!-- Main Content Area -->
         <div class="main-section">
-            <!-- Navigation Tabs -->
-            <div class="tabs">
+            <!-- Navigation Tabs - Sticky -->
+            <div class="tabs sticky-tabs" id="stickyTabs">
                 <button class="tab active" data-tab="analyze">📸 Analysis</button>
                 <button class="tab" data-tab="colors">🎨 Colors</button>
                 <button class="tab" data-tab="ai-advice">🤖 AI Stylist</button>
                 <button class="tab" data-tab="ar">✨ AR Try-On</button>
+                <button class="tab" data-tab="stats">📊 Statistics</button>
             </div>
 
             <!-- Tab Contents (keeping your existing structure) -->
@@ -911,14 +940,38 @@
                     <p style="font-size: 1.2em; color: #666; font-weight: 500;">— OR —</p>
                 </div>
 
-                <div class="camera-preview" id="cameraPreview" style="display: none;">
-                    <video id="webcam" autoplay playsinline></video>
+                <div class="camera-preview" id="cameraPreview" style="display: none; position: relative;">
+                    <video id="webcam" autoplay playsinline style="width: 100%; border-radius: 24px;"></video>
+                    <canvas id="faceDetectionCanvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; border-radius: 24px;"></canvas>
+                    <div id="cameraOverlay" style="position: absolute; top: 20px; left: 20px; background: rgba(102, 126, 234, 0.9); color: white; padding: 10px 20px; border-radius: 12px; font-weight: 600; display: none;">
+                        <span id="faceCount">👤 0 faces detected</span>
+                    </div>
+                    <div id="cameraGuide" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80%; height: 80%; border: 3px dashed rgba(102, 126, 234, 0.5); border-radius: 20px; pointer-events: none; display: none;"></div>
                 </div>
 
-                <div style="text-align: center;">
-                    <button class="btn btn-secondary" id="startCamera">📷 Use Webcam</button>
-                    <button class="btn btn-outline" id="captureBtn" style="display: none;">📸 Capture Photo</button>
-                    <button class="btn btn-outline" id="stopCamera" style="display: none;">🛑 Stop Camera</button>
+                <div style="text-align: center; margin-top: 20px;">
+                    <button class="btn btn-secondary" id="startCamera">
+                        <span>📷</span>
+                        <span>Start Camera</span>
+                    </button>
+                    <button class="btn btn-primary" id="captureBtn" style="display: none;">
+                        <span>📸</span>
+                        <span>Capture & Analyze</span>
+                    </button>
+                    <button class="btn btn-outline" id="stopCamera" style="display: none;">
+                        <span>🛑</span>
+                        <span>Stop Camera</span>
+                    </button>
+                </div>
+                
+                <div id="cameraTips" style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%); padding: 20px; border-radius: 15px; margin-top: 20px; display: none;">
+                    <h4 style="color: #667eea; margin-bottom: 10px;">💡 Tips for Best Results:</h4>
+                    <ul style="color: #555; line-height: 1.8; margin: 0; padding-left: 20px;">
+                        <li>Ensure good lighting - natural light works best</li>
+                        <li>Face the camera directly with a neutral expression</li>
+                        <li>Remove glasses or hats for better face detection</li>
+                        <li>Keep your face centered in the frame</li>
+                    </ul>
                 </div>
 
                 <div id="analysisResults" class="hidden" style="margin-top: 40px;"></div>
@@ -967,21 +1020,34 @@
             <!-- AI Advice Tab -->
             <div class="tab-content" id="ai-advice">
                 <h2>🤖 AI Fashion Stylist</h2>
-                <p style="color: #666; margin-bottom: 30px;">Get personalized fashion advice powered by DeepSeek R1</p>
+                <p style="color: #666; margin-bottom: 30px;">Get personalized fashion advice based on YOUR skin tone analysis</p>
 
+                <div id="aiAnalysisNotice" style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%); padding: 20px; border-radius: 15px; margin-bottom: 30px; display: none; border-left: 4px solid #667eea;">
+                    <h4 style="color: #667eea; margin-bottom: 10px;">✨ Using Your Latest Analysis</h4>
+                    <p style="color: #555; margin: 0;">Your skin tone, colors, and preferences are automatically loaded from your last analysis. All recommendations are personalized to YOU!</p>
+                </div>
 
                 <div style="background: #f8f9ff; padding: 25px; border-radius: 15px; margin-bottom: 30px;">
                     <h3>Tell us about yourself</h3>
                     
                     <div style="margin: 20px 0;">
-                        <label style="display: block; margin-bottom: 10px; font-weight: 600;">Your Skin Tone (Hex):</label>
+                        <label style="display: block; margin-bottom: 10px; font-weight: 600;">
+                            Your Skin Tone (Hex): 
+                            <span id="skinToneSource" style="font-size: 0.85em; color: #667eea; font-weight: normal;">(Auto-filled from analysis)</span>
+                        </label>
                         <input type="text" id="aiSkinTone" placeholder="#B9966A" 
                                style="padding: 12px; border: 2px solid #ddd; border-radius: 8px; width: 100%; max-width: 300px;">
+                        <div style="margin-top: 8px; display: flex; align-items: center; gap: 10px;">
+                            <div id="skinTonePreview" style="width: 40px; height: 40px; border-radius: 8px; border: 2px solid #ddd; background: #B9966A;"></div>
+                            <span style="font-size: 0.9em; color: #666;">Live preview</span>
+                        </div>
                     </div>
 
-
                     <div style="margin: 20px 0;">
-                        <label style="display: block; margin-bottom: 10px; font-weight: 600;">Monk Scale Level:</label>
+                        <label style="display: block; margin-bottom: 10px; font-weight: 600;">
+                            Monk Scale Level:
+                            <span id="monkScaleSource" style="font-size: 0.85em; color: #667eea; font-weight: normal;">(Auto-filled from analysis)</span>
+                        </label>
                         <select id="aiMonkLevel" style="padding: 12px; border: 2px solid #ddd; border-radius: 8px; width: 100%; max-width: 300px;">
                             <option value="MST-1">MST-1 - Very Light</option>
                             <option value="MST-2">MST-2 - Light</option>
@@ -993,6 +1059,31 @@
                             <option value="MST-8">MST-8 - Brown</option>
                             <option value="MST-9">MST-9 - Deep Brown</option>
                             <option value="MST-10">MST-10 - Very Deep</option>
+                        </select>
+                    </div>
+                    
+                    <div style="margin: 20px 0;">
+                        <label style="display: block; margin-bottom: 10px; font-weight: 600;">
+                            Gender:
+                            <span id="genderSource" style="font-size: 0.85em; color: #667eea; font-weight: normal;">(Auto-filled from analysis)</span>
+                        </label>
+                        <select id="aiGender" style="padding: 12px; border: 2px solid #ddd; border-radius: 8px; width: 100%; max-width: 300px;">
+                            <option value="both">Both</option>
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                        </select>
+                    </div>
+                    
+                    <div style="margin: 20px 0;">
+                        <label style="display: block; margin-bottom: 10px; font-weight: 600;">
+                            Age Group:
+                            <span id="ageSource" style="font-size: 0.85em; color: #667eea; font-weight: normal;">(Auto-filled from analysis)</span>
+                        </label>
+                        <select id="aiAgeGroup" style="padding: 12px; border: 2px solid #ddd; border-radius: 8px; width: 100%; max-width: 300px;">
+                            <option value="Young Adult">Young Adult</option>
+                            <option value="Teen">Teen</option>
+                            <option value="Adult">Adult</option>
+                            <option value="Senior">Senior</option>
                         </select>
                     </div>
 
@@ -1027,41 +1118,163 @@
                         <div id="aiAdviceContent" style="line-height: 1.8; white-space: pre-wrap;"></div>
                     </div>
                 </div>
+
+                <!-- Chatbot Section -->
+                <div style="margin-top: 50px; border-top: 2px solid #e0e0e0; padding-top: 30px;">
+                    <h3 style="color: #667eea; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                        <span>💬</span>
+                        <span>Chat with AI Fashion Stylist</span>
+                    </h3>
+                    <p style="color: #666; margin-bottom: 20px;">Ask me anything about fashion, colors, or styling! I'll give you personalized advice based on your analysis.</p>
+                    
+                    <!-- Chat Container -->
+                    <div id="chatbotContainer" style="background: white; border: 2px solid #e0e0e0; border-radius: 15px; padding: 20px; max-height: 500px; display: flex; flex-direction: column;">
+                        <!-- Chat Messages -->
+                        <div id="chatMessages" style="flex: 1; overflow-y: auto; margin-bottom: 20px; min-height: 300px; max-height: 400px; padding: 15px; background: #f8f9ff; border-radius: 10px;">
+                            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 16px; border-radius: 12px; margin-bottom: 12px; max-width: 80%; display: inline-block;">
+                                <div style="font-weight: 600; margin-bottom: 4px;">VastraVista AI</div>
+                                <div style="font-size: 0.9em; opacity: 0.95;">Hello! I'm your AI fashion stylist. I can help you with color recommendations, outfit suggestions, and styling tips based on your skin tone analysis. What would you like to know?</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Chat Input -->
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <input type="text" id="chatInput" placeholder="Ask me about fashion, colors, or styling..." 
+                                   style="flex: 1; padding: 12px 16px; border: 2px solid #ddd; border-radius: 25px; font-size: 0.95em; outline: none; transition: border-color 0.3s;"
+                                   onkeypress="if(event.key === 'Enter') sendChatMessage()">
+                            <button class="btn btn-primary" id="sendChatBtn" onclick="sendChatMessage()" 
+                                    style="padding: 12px 24px; border-radius: 25px; font-weight: 600; white-space: nowrap;">
+                                Send
+                            </button>
+                        </div>
+                        <div style="margin-top: 10px; font-size: 0.85em; color: #999; text-align: center;">
+                            💡 Tip: Ask about colors, outfits, or styling tips!
+                        </div>
+                    </div>
+                </div>
             </div>
 
 
             <!-- AR Try-On Tab -->
             <div class="tab-content" id="ar">
-                <h2>✨ AR Color Draping</h2>
-                <p style="color: #666; margin-bottom: 30px;">See how different colors look on you in real-time</p>
+                <h2>✨ Advanced AR Virtual Try-On</h2>
+                <p style="color: #666; margin-bottom: 30px;">Real-time outfit visualization with skin-tone matched colors</p>
 
-
-                <div style="margin-bottom: 30px;">
-                    <button class="btn btn-primary" id="startARCamera">📷 Start AR Mode</button>
-                    <button class="btn btn-outline" id="stopARCamera" style="display: none;">🛑 Stop AR</button>
-                </div>
-
-
-                <div style="margin-bottom: 20px;">
-                    <label style="display: block; margin-bottom: 10px; font-weight: 600;">Choose Color to Try:</label>
-                    <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-                        <button class="btn btn-outline color-try-btn" data-color="255,0,0">🔴 Red</button>
-                        <button class="btn btn-outline color-try-btn" data-color="0,0,255">🔵 Blue</button>
-                        <button class="btn btn-outline color-try-btn" data-color="0,255,0">🟢 Green</button>
-                        <button class="btn btn-outline color-try-btn" data-color="255,215,0">🟡 Gold</button>
-                        <button class="btn btn-outline color-try-btn" data-color="128,0,128">🟣 Purple</button>
-                        <button class="btn btn-outline color-try-btn" data-color="255,192,203">🩷 Pink</button>
+                <!-- AR Mode Selection -->
+                <div style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%); padding: 20px; border-radius: 15px; margin-bottom: 30px;">
+                    <h3 style="color: #667eea; margin-bottom: 15px;">🎯 AR Mode Selection</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                        <button class="btn btn-outline ar-mode-btn" data-mode="cloth-overlay" style="padding: 15px;">
+                            <div style="font-size: 2em; margin-bottom: 8px;">👕</div>
+                            <div style="font-weight: 600;">Cloth Overlay</div>
+                            <div style="font-size: 0.85em; opacity: 0.8;">T-shirts, Shirts, Dresses</div>
+                        </button>
+                        <button class="btn btn-outline ar-mode-btn" data-mode="full-body" style="padding: 15px;">
+                            <div style="font-size: 2em; margin-bottom: 8px;">🦴</div>
+                            <div style="font-weight: 600;">Full Body Tracking</div>
+                            <div style="font-size: 0.85em; opacity: 0.8;">Skeleton tracking</div>
+                        </button>
+                        <button class="btn btn-outline ar-mode-btn" data-mode="multi-person" style="padding: 15px;">
+                            <div style="font-size: 2em; margin-bottom: 8px;">👥</div>
+                            <div style="font-weight: 600;">Multi-Person</div>
+                            <div style="font-size: 0.85em; opacity: 0.8;">Group try-on</div>
+                        </button>
                     </div>
                 </div>
 
-
-                <div id="arPreview" style="display: none; text-align: center;">
-                    <canvas id="arCanvas" width="640" height="480" style="width: 100%; max-width: 640px; border-radius: 15px; display: inline-block;"></canvas>
+                <!-- Camera Controls -->
+                <div style="margin-bottom: 30px; text-align: center;">
+                    <button class="btn btn-primary" id="startARCamera">
+                        <span>📷</span>
+                        <span>Start AR Camera</span>
+                    </button>
+                    <button class="btn btn-outline" id="stopARCamera" style="display: none;">
+                        <span>🛑</span>
+                        <span>Stop AR</span>
+                    </button>
+                    <button class="btn btn-secondary" id="captureAR" style="display: none;">
+                        <span>📸</span>
+                        <span>Capture</span>
+                    </button>
                 </div>
 
+                <!-- Skin-Tone Matched Colors (Dynamic) -->
+                <div id="arColorPalette" style="margin-bottom: 20px; display: none;">
+                    <label style="display: block; margin-bottom: 10px; font-weight: 600;">
+                        🎨 Your Skin-Tone Matched Colors (Based on Analysis):
+                    </label>
+                    <div id="skinToneColors" style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
+                        <!-- Colors will be loaded dynamically from user's analysis -->
+                    </div>
+                    <div style="background: rgba(102, 126, 234, 0.1); padding: 12px; border-radius: 10px; font-size: 0.9em; color: #555;">
+                        💡 These colors are automatically matched to your skin tone for the best look!
+                    </div>
+                </div>
 
+                <!-- Outfit Type Selection -->
+                <div id="outfitTypeSelection" style="margin-bottom: 20px; display: none;">
+                    <label style="display: block; margin-bottom: 10px; font-weight: 600;">👔 Select Outfit Type:</label>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="btn btn-outline outfit-type-btn" data-type="tshirt">👕 T-Shirt</button>
+                        <button class="btn btn-outline outfit-type-btn" data-type="shirt">👔 Shirt</button>
+                        <button class="btn btn-outline outfit-type-btn" data-type="kurta">👘 Kurta</button>
+                        <button class="btn btn-outline outfit-type-btn" data-type="dress">👗 Dress</button>
+                        <button class="btn btn-outline outfit-type-btn" data-type="hoodie">🧥 Hoodie</button>
+                        <button class="btn btn-outline outfit-type-btn" data-type="jacket">🧥 Jacket</button>
+                    </div>
+                </div>
+
+                <!-- AR Preview with Overlays -->
+                <div id="arPreview" style="display: none; text-align: center; position: relative; margin-bottom: 20px;">
+                    <div style="position: relative; display: inline-block;">
+                        <video id="arVideo" autoplay playsinline style="width: 100%; max-width: 640px; border-radius: 15px; display: block;"></video>
+                        <canvas id="arCanvas" style="position: absolute; top: 0; left: 0; width: 100%; max-width: 640px; border-radius: 15px; pointer-events: none;"></canvas>
+                        <canvas id="skeletonCanvas" style="position: absolute; top: 0; left: 0; width: 100%; max-width: 640px; border-radius: 15px; pointer-events: none; display: none;"></canvas>
+                    </div>
+                    <div id="arStatus" style="margin-top: 10px; padding: 10px; background: rgba(102, 126, 234, 0.1); border-radius: 10px; display: none;">
+                        <span id="arStatusText">Initializing AR...</span>
+                    </div>
+                    <div id="arWarning" style="margin-top: 10px; padding: 12px; background: rgba(255, 152, 0, 0.1); border: 2px solid #ff9800; border-radius: 10px; color: #e65100; display: none; font-weight: 500;">
+                        ⚠️ <span id="arWarningText"></span>
+                    </div>
+                </div>
+
+                <!-- AR Controls -->
+                <div id="arControls" style="display: none; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                    <h4 style="color: #667eea; margin-bottom: 15px;">🎮 AR Controls</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
+                        <button class="btn btn-outline" id="nextColor">🔄 Next Color</button>
+                        <button class="btn btn-outline" id="prevColor">⏮️ Prev Color</button>
+                        <button class="btn btn-outline" id="resetAR">🔄 Reset</button>
+                        <button class="btn btn-outline" id="toggleSkeleton">🦴 Toggle Skeleton</button>
+                    </div>
+                    <div style="margin-top: 15px; padding: 12px; background: #f8f9ff; border-radius: 10px; font-size: 0.9em;">
+                        <strong>💡 Gesture Controls:</strong><br>
+                        Raise hand → Next outfit | Swipe right → Change color | Two hands → Change category
+                    </div>
+                </div>
+
+                <!-- AR Results -->
                 <div id="arResults" class="hidden" style="margin-top: 30px;">
                     <!-- AR results will be shown here -->
+                </div>
+            </div>
+
+            <!-- Statistics Tab -->
+            <div class="tab-content" id="stats">
+                <h2>📊 Your Fashion Analytics</h2>
+                <p style="color: #666; margin-bottom: 30px;">Track your style journey and insights</p>
+
+                <div id="statsContent" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 25px; margin-bottom: 30px;">
+                    <!-- Stats will be loaded here -->
+                </div>
+
+                <div style="text-align: center;">
+                    <button class="btn btn-primary" id="loadStats">🔄 Refresh Statistics</button>
+                </div>
+
+                <div id="statsDetails" style="margin-top: 30px;">
+                    <!-- Detailed stats will be shown here -->
                 </div>
             </div>
 

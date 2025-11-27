@@ -23,14 +23,21 @@ class ARColorDraping:
         """Initialize AR color draping system"""
         self.logger = logging.getLogger(__name__)
         
-        # Import MediaPipe for face mesh detection
-        import mediapipe as mp
-        self.mp_face_mesh = mp.solutions.face_mesh
-        self.face_mesh = self.mp_face_mesh.FaceMesh(
-            static_image_mode=True,
-            max_num_faces=5,
-            min_detection_confidence=0.5
-        )
+        # Import MediaPipe for face mesh detection (with error handling)
+        try:
+            import mediapipe as mp
+            self.mp_face_mesh = mp.solutions.face_mesh
+            self.face_mesh = self.mp_face_mesh.FaceMesh(
+                static_image_mode=True,
+                max_num_faces=5,
+                min_detection_confidence=0.5
+            )
+            self.mediapipe_available = True
+        except ImportError:
+            self.logger.warning("MediaPipe not available - using fallback detection")
+            self.mediapipe_available = False
+            self.face_mesh = None
+            self.mp_face_mesh = None
         
         # Define draping regions (neck/shoulder area landmarks)
         self.draping_landmarks = {
@@ -39,7 +46,8 @@ class ARColorDraping:
             'shoulder_right': [454, 356, 389, 251, 284, 332, 297]
         }
         
-        self.logger.info("🎨 AR Color Draping initialized")
+        status = " (MediaPipe available)" if self.mediapipe_available else " (MediaPipe not available - using fallback)"
+        self.logger.info("🎨 AR Color Draping initialized" + status)
     
     def apply_color_draping(self, image_path: str, color_rgb: Tuple[int, int, int],
                            opacity: float = 0.6, region: str = 'collar') -> np.ndarray:
@@ -63,10 +71,16 @@ class ARColorDraping:
             
             image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             
-            # Detect face mesh
-            results = self.face_mesh.process(image_rgb)
+            # Detect face mesh (if MediaPipe available)
+            results = None
+            if self.mediapipe_available and self.face_mesh:
+                try:
+                    results = self.face_mesh.process(image_rgb)
+                except Exception as e:
+                    self.logger.warning(f"MediaPipe processing failed: {e}")
+                    results = None
             
-            if not results.multi_face_landmarks:
+            if not results or not results.multi_face_landmarks:
                 self.logger.warning("No face detected for color draping")
                 return image
             
@@ -122,8 +136,13 @@ class ARColorDraping:
             if image is None:
                 return {}
             image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            results = self.face_mesh.process(image_rgb)
-            if not results.multi_face_landmarks:
+            results = None
+            if self.mediapipe_available and self.face_mesh:
+                try:
+                    results = self.face_mesh.process(image_rgb)
+                except:
+                    pass
+            if not results or not results.multi_face_landmarks:
                 return {}
             face_landmarks = results.multi_face_landmarks[0]
             h, w, _ = image.shape
@@ -187,8 +206,13 @@ class ARColorDraping:
             if roi is None or roi.size == 0:
                 return {}
             roi_rgb = cv2.cvtColor(roi, cv2.COLOR_BGR2RGB)
-            results = self.face_mesh.process(roi_rgb)
-            if not results.multi_face_landmarks:
+            results = None
+            if self.mediapipe_available and self.face_mesh:
+                try:
+                    results = self.face_mesh.process(roi_rgb)
+                except:
+                    pass
+            if not results or not results.multi_face_landmarks:
                 return {}
             h, w, _ = roi.shape
             mask = np.zeros((h, w), dtype=np.uint8)
@@ -240,6 +264,313 @@ class ARColorDraping:
             }
         except Exception:
             return {}
+    
+    def apply_clothing_overlay(self, image_path: str, color_rgb: Tuple[int, int, int],
+                              outfit_type: str = 'tshirt', opacity: float = 0.7) -> Optional[np.ndarray]:
+        """
+        Production method: Apply realistic clothing overlay based on outfit type
+        
+        Args:
+            image_path: Path to user image
+            color_rgb: RGB color for clothing
+            outfit_type: Type of outfit (tshirt, shirt, kurta, dress, hoodie, jacket)
+            opacity: Overlay opacity (0-1)
+            
+        Returns:
+            Image with clothing overlay or None if failed
+        """
+        try:
+            # Load image
+            image = cv2.imread(image_path)
+            if image is None:
+                self.logger.error(f"Could not load image: {image_path}")
+                return None
+            
+            image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            h, w = image.shape[:2]
+            
+            # Detect face for positioning
+            results = None
+            if self.mediapipe_available and self.face_mesh:
+                try:
+                    results = self.face_mesh.process(image_rgb)
+                except Exception as e:
+                    self.logger.warning(f"Face detection failed: {e}")
+                    results = None
+            
+            if not results or not results.multi_face_landmarks:
+                self.logger.warning("No face detected - using center positioning")
+                # Fallback: use center of image
+                face_center_x = w // 2
+                face_center_y = h // 3
+                shoulder_y = int(h * 0.4)
+            else:
+                # Get face landmarks for positioning
+                face_landmarks = results.multi_face_landmarks[0]
+                
+                # Get chin point (lowest face point)
+                chin_y = 0
+                chin_x = w // 2
+                for landmark in face_landmarks.landmark:
+                    y = int(landmark.y * h)
+                    if y > chin_y:
+                        chin_y = y
+                        chin_x = int(landmark.x * w)
+                
+                face_center_x = chin_x
+                face_center_y = chin_y
+                shoulder_y = int(chin_y + (h - chin_y) * 0.15)
+            
+            # Create clothing mask based on outfit type
+            mask = np.zeros((h, w), dtype=np.uint8)
+            
+            if outfit_type in ['tshirt', 'shirt']:
+                # T-shirt/Shirt shape
+                width = int(w * 0.5)
+                height = int((h - shoulder_y) * 0.4)
+                
+                # Main body
+                pts = np.array([
+                    [face_center_x - width//2, shoulder_y],
+                    [face_center_x - width//3, shoulder_y + height],
+                    [face_center_x + width//3, shoulder_y + height],
+                    [face_center_x + width//2, shoulder_y]
+                ], np.int32)
+                cv2.fillPoly(mask, [pts], 255)
+                
+                # Sleeves
+                sleeve_width = int(width * 0.25)
+                sleeve_height = int(height * 0.6)
+                
+                # Left sleeve
+                left_sleeve = np.array([
+                    [face_center_x - width//2, shoulder_y],
+                    [face_center_x - width//2 - sleeve_width, shoulder_y + sleeve_height//2],
+                    [face_center_x - width//3, shoulder_y + sleeve_height],
+                    [face_center_x - width//3, shoulder_y]
+                ], np.int32)
+                cv2.fillPoly(mask, [left_sleeve], 255)
+                
+                # Right sleeve
+                right_sleeve = np.array([
+                    [face_center_x + width//2, shoulder_y],
+                    [face_center_x + width//2 + sleeve_width, shoulder_y + sleeve_height//2],
+                    [face_center_x + width//3, shoulder_y + sleeve_height],
+                    [face_center_x + width//3, shoulder_y]
+                ], np.int32)
+                cv2.fillPoly(mask, [right_sleeve], 255)
+                
+            elif outfit_type == 'kurta':
+                # Kurta - longer, traditional
+                width = int(w * 0.45)
+                height = int((h - shoulder_y) * 0.6)
+                
+                # Main body (longer)
+                pts = np.array([
+                    [face_center_x - width//2, shoulder_y],
+                    [face_center_x - width//3, shoulder_y + height],
+                    [face_center_x + width//3, shoulder_y + height],
+                    [face_center_x + width//2, shoulder_y]
+                ], np.int32)
+                cv2.fillPoly(mask, [pts], 255)
+                
+                # Sleeves (longer)
+                sleeve_width = int(width * 0.3)
+                sleeve_height = int(height * 0.8)
+                
+                left_sleeve = np.array([
+                    [face_center_x - width//2, shoulder_y],
+                    [face_center_x - width//2 - sleeve_width, shoulder_y + sleeve_height//2],
+                    [face_center_x - width//3, shoulder_y + sleeve_height],
+                    [face_center_x - width//3, shoulder_y]
+                ], np.int32)
+                cv2.fillPoly(mask, [left_sleeve], 255)
+                
+                right_sleeve = np.array([
+                    [face_center_x + width//2, shoulder_y],
+                    [face_center_x + width//2 + sleeve_width, shoulder_y + sleeve_height//2],
+                    [face_center_x + width//3, shoulder_y + sleeve_height],
+                    [face_center_x + width//3, shoulder_y]
+                ], np.int32)
+                cv2.fillPoly(mask, [right_sleeve], 255)
+                
+            elif outfit_type == 'dress':
+                # Dress - wider at bottom
+                top_width = int(w * 0.4)
+                bottom_width = int(w * 0.55)
+                height = int((h - shoulder_y) * 0.65)
+                
+                pts = np.array([
+                    [face_center_x - top_width//2, shoulder_y],
+                    [face_center_x - bottom_width//2, shoulder_y + height],
+                    [face_center_x + bottom_width//2, shoulder_y + height],
+                    [face_center_x + top_width//2, shoulder_y]
+                ], np.int32)
+                cv2.fillPoly(mask, [pts], 255)
+                
+            elif outfit_type == 'hoodie':
+                # Hoodie - with hood shape
+                width = int(w * 0.5)
+                height = int((h - shoulder_y) * 0.45)
+                
+                # Main body
+                pts = np.array([
+                    [face_center_x - width//2, shoulder_y],
+                    [face_center_x - width//3, shoulder_y + height],
+                    [face_center_x + width//3, shoulder_y + height],
+                    [face_center_x + width//2, shoulder_y]
+                ], np.int32)
+                cv2.fillPoly(mask, [pts], 255)
+                
+                # Hood (semi-circle above shoulders)
+                hood_center_y = int(shoulder_y - (h * 0.1))
+                cv2.ellipse(mask, (face_center_x, hood_center_y), 
+                           (int(width * 0.4), int(h * 0.08)), 0, 180, 360, 255, -1)
+                
+                # Sleeves
+                sleeve_width = int(width * 0.25)
+                sleeve_height = int(height * 0.6)
+                
+                left_sleeve = np.array([
+                    [face_center_x - width//2, shoulder_y],
+                    [face_center_x - width//2 - sleeve_width, shoulder_y + sleeve_height//2],
+                    [face_center_x - width//3, shoulder_y + sleeve_height],
+                    [face_center_x - width//3, shoulder_y]
+                ], np.int32)
+                cv2.fillPoly(mask, [left_sleeve], 255)
+                
+                right_sleeve = np.array([
+                    [face_center_x + width//2, shoulder_y],
+                    [face_center_x + width//2 + sleeve_width, shoulder_y + sleeve_height//2],
+                    [face_center_x + width//3, shoulder_y + sleeve_height],
+                    [face_center_x + width//3, shoulder_y]
+                ], np.int32)
+                cv2.fillPoly(mask, [right_sleeve], 255)
+                
+            elif outfit_type == 'jacket':
+                # Jacket - structured, with collar
+                width = int(w * 0.52)
+                height = int((h - shoulder_y) * 0.5)
+                
+                # Main body
+                pts = np.array([
+                    [face_center_x - width//2, shoulder_y],
+                    [face_center_x - width//3, shoulder_y + height],
+                    [face_center_x + width//3, shoulder_y + height],
+                    [face_center_x + width//2, shoulder_y]
+                ], np.int32)
+                cv2.fillPoly(mask, [pts], 255)
+                
+                # Collar (V-shape)
+                collar_pts = np.array([
+                    [face_center_x - width//4, shoulder_y],
+                    [face_center_x, shoulder_y - int(h * 0.05)],
+                    [face_center_x + width//4, shoulder_y]
+                ], np.int32)
+                cv2.fillPoly(mask, [collar_pts], 255)
+                
+                # Sleeves
+                sleeve_width = int(width * 0.28)
+                sleeve_height = int(height * 0.65)
+                
+                left_sleeve = np.array([
+                    [face_center_x - width//2, shoulder_y],
+                    [face_center_x - width//2 - sleeve_width, shoulder_y + sleeve_height//2],
+                    [face_center_x - width//3, shoulder_y + sleeve_height],
+                    [face_center_x - width//3, shoulder_y]
+                ], np.int32)
+                cv2.fillPoly(mask, [left_sleeve], 255)
+                
+                right_sleeve = np.array([
+                    [face_center_x + width//2, shoulder_y],
+                    [face_center_x + width//2 + sleeve_width, shoulder_y + sleeve_height//2],
+                    [face_center_x + width//3, shoulder_y + sleeve_height],
+                    [face_center_x + width//3, shoulder_y]
+                ], np.int32)
+                cv2.fillPoly(mask, [right_sleeve], 255)
+            
+            # Smooth mask edges
+            mask = cv2.GaussianBlur(mask, (15, 15), 0)
+            mask = (mask > 127).astype(np.uint8) * 255
+            
+            # Create color overlay
+            color_overlay = np.zeros_like(image)
+            color_overlay[:] = color_rgb[::-1]  # BGR format
+            
+            # Apply overlay with mask
+            mask_3channel = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR) / 255.0
+            result = image * (1 - mask_3channel * opacity) + color_overlay * mask_3channel * opacity
+            result = result.astype(np.uint8)
+            
+            self.logger.info(f"✅ Applied {outfit_type} overlay: RGB{color_rgb}")
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"Clothing overlay failed: {e}", exc_info=True)
+            return None
+    
+    def detect_body_pose(self, image_path: str) -> Dict:
+        """
+        Production method: Detect body pose and keypoints
+        Returns body landmarks for AR positioning
+        """
+        try:
+            image = cv2.imread(image_path)
+            if image is None:
+                return {'success': False, 'error': 'Could not load image'}
+            
+            image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            h, w = image.shape[:2]
+            
+            # Detect face for reference
+            results = None
+            if self.mediapipe_available and self.face_mesh:
+                try:
+                    results = self.face_mesh.process(image_rgb)
+                except:
+                    pass
+            
+            body_data = {
+                'success': True,
+                'face_detected': False,
+                'landmarks': {},
+                'body_region': {}
+            }
+            
+            if results and results.multi_face_landmarks:
+                body_data['face_detected'] = True
+                face_landmarks = results.multi_face_landmarks[0]
+                
+                # Extract key points
+                # Chin (lowest point)
+                chin_y = 0
+                chin_x = w // 2
+                for landmark in face_landmarks.landmark:
+                    y = int(landmark.y * h)
+                    if y > chin_y:
+                        chin_y = y
+                        chin_x = int(landmark.x * w)
+                
+                # Estimate body regions
+                body_data['landmarks'] = {
+                    'face_center': {'x': chin_x, 'y': int(chin_y * 0.7)},
+                    'chin': {'x': chin_x, 'y': chin_y},
+                    'shoulder_y': int(chin_y + (h - chin_y) * 0.15),
+                    'chest_y': int(chin_y + (h - chin_y) * 0.3),
+                    'waist_y': int(chin_y + (h - chin_y) * 0.5)
+                }
+                
+                body_data['body_region'] = {
+                    'shoulder_width': int(w * 0.5),
+                    'chest_width': int(w * 0.45),
+                    'waist_width': int(w * 0.4)
+                }
+            
+            return body_data
+            
+        except Exception as e:
+            self.logger.error(f"Body pose detection failed: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
     
     def _expand_draping_mask(self, mask: np.ndarray, image_shape: Tuple) -> np.ndarray:
         """Expand mask to cover typical clothing draping area"""

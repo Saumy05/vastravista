@@ -38,39 +38,120 @@ def health_check():
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'GET':
+        # Redirect to dashboard if already logged in
+        from flask_login import current_user
+        if current_user.is_authenticated:
+            return redirect(url_for('auth.dashboard'))
         return render_template('login.html')
+    
     email = request.form.get('email', '').strip().lower()
     password = request.form.get('password', '')
+    remember = request.form.get('remember') == '1'
+    
+    # Validation
+    if not email or not password:
+        flash('Please fill in all fields', 'danger')
+        return render_template('login.html'), 400
+    
+    # Email format validation
+    import re
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if not re.match(email_pattern, email):
+        flash('Please enter a valid email address', 'danger')
+        return render_template('login.html'), 400
+    
     user = User.query.filter_by(email=email).first()
     if not user or not user.check_password(password):
         flash('Invalid email or password', 'danger')
         return render_template('login.html'), 401
+    
+    # Update last login
     user.last_login = datetime.utcnow()
     db.session.commit()
-    login_user(user)
+    
+    # Login user with remember me option
+    login_user(user, remember=remember)
+    
+    # Redirect to next page if provided, otherwise dashboard
+    next_page = request.args.get('next')
+    if next_page:
+        return redirect(next_page)
+    
+    flash(f'Welcome back, {user.username}!', 'success')
     return redirect(url_for('auth.dashboard'))
 
 @auth_bp.route('/signup', methods=['GET', 'POST'])
 def signup():
     if request.method == 'GET':
+        # Redirect to dashboard if already logged in
+        from flask_login import current_user
+        if current_user.is_authenticated:
+            return redirect(url_for('auth.dashboard'))
         return render_template('signup.html')
+    
     email = request.form.get('email', '').strip().lower()
     username = request.form.get('username', '').strip()
     password = request.form.get('password', '')
+    
+    # Validation
     if not email or not username or not password:
         flash('All fields are required', 'danger')
         return render_template('signup.html'), 400
+    
+    # Email format validation
+    import re
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if not re.match(email_pattern, email):
+        flash('Please enter a valid email address', 'danger')
+        return render_template('signup.html'), 400
+    
+    # Username validation
+    username_pattern = r'^[a-zA-Z0-9_]{3,30}$'
+    if not re.match(username_pattern, username):
+        flash('Username must be 3-30 characters (letters, numbers, underscore only)', 'danger')
+        return render_template('signup.html'), 400
+    
+    # Password strength validation
+    if len(password) < 8:
+        flash('Password must be at least 8 characters long', 'danger')
+        return render_template('signup.html'), 400
+    
+    password_requirements = {
+        'uppercase': bool(re.search(r'[A-Z]', password)),
+        'lowercase': bool(re.search(r'[a-z]', password)),
+        'number': bool(re.search(r'[0-9]', password)),
+        'special': bool(re.search(r'[!@#$%^&*(),.?":{}|<>]', password))
+    }
+    
+    if not all(password_requirements.values()):
+        flash('Password must contain uppercase, lowercase, number, and special character', 'danger')
+        return render_template('signup.html'), 400
+    
+    # Check for existing user
     existing = User.query.filter((User.email == email) | (User.username == username)).first()
     if existing:
-        flash('Email or username already exists', 'danger')
+        if existing.email == email:
+            flash('Email already registered. Please login instead.', 'danger')
+        else:
+            flash('Username already taken. Please choose another.', 'danger')
         return render_template('signup.html'), 400
-    user = User(email=email, username=username)
-    user.set_password(password)
-    user.is_verified = True
-    db.session.add(user)
-    db.session.commit()
-    login_user(user)
-    return redirect(url_for('auth.dashboard'))
+    
+    # Create user
+    try:
+        user = User(email=email, username=username)
+        user.set_password(password)
+        user.is_verified = True  # Auto-verify for now (can add email verification later)
+        db.session.add(user)
+        db.session.commit()
+        
+        login_user(user)
+        flash(f'Account created successfully! Welcome, {username}!', 'success')
+        return redirect(url_for('auth.dashboard'))
+    except Exception as e:
+        logger.error(f"Signup error: {e}")
+        db.session.rollback()
+        flash('An error occurred. Please try again.', 'danger')
+        return render_template('signup.html'), 500
 
 
 # Backward compatibility: redirect old /api/ to login
@@ -81,21 +162,129 @@ def api_root_redirect():
 @auth_bp.route('/dashboard')
 @login_required
 def dashboard():
-    return render_template('index.html')
+    from flask_login import current_user
+    return render_template('index.html', user=current_user)
 
 @auth_bp.route('/logout')
 @login_required
 def logout():
+    from flask_login import current_user
+    username = current_user.username
     logout_user()
+    flash(f'You have been logged out. See you soon, {username}!', 'info')
     return redirect(url_for('auth.login'))
+
+@auth_bp.route('/api/check-username', methods=['POST'])
+def check_username():
+    """Check if username is available (AJAX endpoint)"""
+    try:
+        data = request.get_json()
+        username = data.get('username', '').strip()
+        
+        if not username:
+            return jsonify({'available': False, 'message': 'Username is required'}), 400
+        
+        # Validate format
+        import re
+        username_pattern = r'^[a-zA-Z0-9_]{3,30}$'
+        if not re.match(username_pattern, username):
+            return jsonify({'available': False, 'message': 'Invalid format'}), 400
+        
+        # Check if exists
+        existing = User.query.filter_by(username=username).first()
+        
+        if existing:
+            return jsonify({
+                'available': False,
+                'message': 'Username already taken'
+            }), 200
+        else:
+            return jsonify({
+                'available': True,
+                'message': 'Username available'
+            }), 200
+    except Exception as e:
+        logger.error(f"Username check error: {e}")
+        return jsonify({'available': False, 'message': 'Error checking username'}), 500
+
+@auth_bp.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    """Password reset request"""
+    if request.method == 'GET':
+        return render_template('forgot_password.html')
+    
+    email = request.form.get('email', '').strip().lower()
+    if not email:
+        flash('Please enter your email address', 'danger')
+        return render_template('forgot_password.html'), 400
+    
+    user = User.query.filter_by(email=email).first()
+    if user:
+        # In production, send email with reset token
+        # For now, just show a message
+        flash('If an account exists with this email, you will receive password reset instructions.', 'info')
+    else:
+        # Don't reveal if email exists (security best practice)
+        flash('If an account exists with this email, you will receive password reset instructions.', 'info')
+    
+    return render_template('forgot_password.html')
+
+@auth_bp.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    """User profile management"""
+    from flask_login import current_user
+    user = current_user
+    
+    if request.method == 'POST':
+        # Update profile
+        new_username = request.form.get('username', '').strip()
+        new_email = request.form.get('email', '').strip().lower()
+        
+        if new_username and new_username != user.username:
+            # Check if username is available
+            existing = User.query.filter_by(username=new_username).first()
+            if existing:
+                flash('Username already taken', 'danger')
+            else:
+                user.username = new_username
+                flash('Username updated successfully', 'success')
+        
+        if new_email and new_email != user.email:
+            # Check if email is available
+            import re
+            email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+            if not re.match(email_pattern, new_email):
+                flash('Invalid email address', 'danger')
+            else:
+                existing = User.query.filter_by(email=new_email).first()
+                if existing:
+                    flash('Email already registered', 'danger')
+                else:
+                    user.email = new_email
+                    flash('Email updated successfully', 'success')
+        
+        db.session.commit()
+        return redirect(url_for('auth.profile'))
+    
+    return render_template('profile.html', user=user)
 
 
 @auth_bp.route('/api/analyze', methods=['POST'])
+@login_required
 def api_analyze():
-    file = request.files.get('image')
-    is_valid, err = validate_image_file(file) if file else (False, 'No image')
-    if not is_valid:
-        return jsonify({'success': False, 'error': err}), 400
+    """Analyze uploaded image for fashion recommendations"""
+    try:
+        file = request.files.get('image')
+        if not file:
+            return jsonify({'success': False, 'error': 'No image file provided'}), 400
+        
+        is_valid, err = validate_image_file(file) if file else (False, 'No image')
+        if not is_valid:
+            return jsonify({'success': False, 'error': err}), 400
+    except Exception as e:
+        logger.error(f"Error validating image: {e}")
+        return jsonify({'success': False, 'error': 'Invalid request'}), 400
 
     ts = int(time.time() * 1000)
     base_name = secure_filename(file.filename or 'upload.jpg')
@@ -406,11 +595,12 @@ def api_analyze():
 
         return jsonify({'success': True, 'data': data})
     except Exception as e:
-        logger.error(f"Analyze error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        logger.error(f"Analyze error: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': 'Analysis failed. Please try again.'}), 500
 
 
 @auth_bp.route('/api/v2/ai-fashion-advice', methods=['POST'])
+@login_required
 def get_ai_fashion_advice():
     try:
         payload = request.get_json(force=True)
@@ -514,6 +704,7 @@ def api_results():
 
 
 @auth_bp.route('/api/v2/monk-scale-info', methods=['GET'])
+@login_required
 def monk_scale_info():
     scale = MonkSkinToneScale()
     levels = scale.get_all_monk_levels()
@@ -527,7 +718,67 @@ def monk_scale_info():
             'best_colors': best
         }
     return jsonify({'monk_scale_levels': payload})
+@auth_bp.route('/api/v2/chatbot', methods=['POST'])
+@login_required
+def chatbot():
+    """
+    Chatbot endpoint for conversational fashion advice
+    """
+    try:
+        payload = request.get_json(force=True)
+        user_message = payload.get('message', '').strip()
+        
+        if not user_message:
+            return jsonify({'success': False, 'error': 'Message is required'}), 400
+        
+        # Get user's latest analysis for context
+        context = {}
+        try:
+            # Try to get from session or recent analysis
+            # For now, we'll use basic context
+            from flask_login import current_user
+            if current_user:
+                # Get user's stored profile data
+                context = {
+                    'gender': {'gender': current_user.gender or 'Unknown'},
+                    'age': {'age_group': current_user.age_group or 'Young Adult'},
+                    'skin_tone': {
+                        'monk_scale': {'monk_level': current_user.skin_tone or 'MST-5'},
+                        'hex': '#B9966A'
+                    }
+                }
+        except Exception as e:
+            logger.warning(f"Could not load user context: {e}")
+        
+        # Get chatbot response using AI stylist
+        try:
+            bot_response = ai_stylist.get_chatbot_response(user_message, context)
+        except AttributeError:
+            # Fallback if method doesn't exist yet
+            bot_response = "I'm here to help with fashion advice! Ask me about colors, outfits, or styling tips based on your analysis."
+        
+        return jsonify({
+            'success': True,
+            'response': bot_response,
+            'model': ai_stylist.ollama_model if ai_stylist.use_ai else 'template'
+        })
+        
+    except Exception as e:
+        logger.error(f"Chatbot error: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': 'Chatbot service unavailable'}), 500
+
+
 @auth_bp.route('/uploads/<path:filename>', methods=['GET'])
+@login_required
 def serve_upload(filename):
-    upload_dir = str(current_app.config.get('UPLOAD_FOLDER'))
-    return send_from_directory(upload_dir, filename)
+    """Serve uploaded files (protected route)"""
+    try:
+        upload_dir = str(current_app.config.get('UPLOAD_FOLDER'))
+        # Security: validate filename to prevent directory traversal
+        safe_filename = secure_filename(filename)
+        if safe_filename != filename:
+            return jsonify({'error': 'Invalid filename'}), 400
+        return send_from_directory(upload_dir, filename)
+    except Exception as e:
+        logger.error(f"Error serving file: {e}")
+        return jsonify({'error': 'File not found'}), 404

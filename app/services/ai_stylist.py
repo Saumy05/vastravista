@@ -9,6 +9,7 @@ import json
 import base64
 import os
 import time
+from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -345,7 +346,7 @@ Be precise and concise. Analyze based only on what you see in the image."""
             return None
     
     def _parse_ai_analysis(self, ai_text):
-        """Parse AI's structured response"""
+        """Parse AI's structured response - more robust parsing"""
         result = {
             'gender': None,
             'age': None,
@@ -353,29 +354,115 @@ Be precise and concise. Analyze based only on what you see in the image."""
             'colors': []
         }
         
-        lines = ai_text.lower().split('\n')
+        if not ai_text or not isinstance(ai_text, str):
+            return result
+        
+        # Normalize text
+        ai_text_lower = ai_text.lower()
+        lines = ai_text.split('\n')
+        
         for line in lines:
-            if 'gender:' in line:
-                gender_text = line.split('gender:')[-1].strip()
-                if 'male' in gender_text and 'female' not in gender_text:
+            line_lower = line.lower().strip()
+            
+            # Parse Gender - try multiple patterns
+            if 'gender:' in line_lower:
+                gender_text = line.split('gender:')[-1].strip() if ':' in line else line.strip()
+                gender_text_lower = gender_text.lower()
+                
+                if 'male' in gender_text_lower and 'female' not in gender_text_lower:
                     result['gender'] = 'Male'
-                elif 'female' in gender_text:
+                elif 'female' in gender_text_lower:
                     result['gender'] = 'Female'
+                elif 'woman' in gender_text_lower or 'girl' in gender_text_lower:
+                    result['gender'] = 'Female'
+                elif 'man' in gender_text_lower or 'boy' in gender_text_lower:
+                    result['gender'] = 'Male'
             
-            elif 'age:' in line:
-                age_text = line.split('age:')[-1].strip()
-                age_nums = ''.join(filter(str.isdigit, age_text[:5]))
+            # Parse Age - try multiple patterns
+            if 'age:' in line_lower:
+                age_text = line.split('age:')[-1].strip() if ':' in line else line.strip()
+                # Extract first number found
+                age_nums = ''.join(filter(str.isdigit, age_text[:10]))
                 if age_nums:
-                    result['age'] = int(age_nums)
+                    try:
+                        age_val = int(age_nums)
+                        if 1 <= age_val <= 120:  # Reasonable age range
+                            result['age'] = age_val
+                    except:
+                        pass
             
-            elif 'skin_tone:' in line or 'skin tone:' in line:
-                skin_text = line.split(':')[-1].strip()
-                result['skin_tone'] = skin_text.title()
+            # Parse Skin Tone - try multiple patterns
+            if 'skin' in line_lower and ('tone' in line_lower or 'color' in line_lower or 'colour' in line_lower):
+                # Try to extract after colon
+                if ':' in line:
+                    skin_text = line.split(':')[-1].strip()
+                else:
+                    # Try to extract after keywords
+                    for keyword in ['skin tone', 'skin color', 'skin colour']:
+                        if keyword in line_lower:
+                            parts = line_lower.split(keyword)
+                            if len(parts) > 1:
+                                skin_text = parts[1].strip()
+                                break
+                    else:
+                        skin_text = line.strip()
+                
+                if skin_text:
+                    result['skin_tone'] = skin_text.title()
             
-            elif 'colors:' in line or 'colour' in line:
-                colors_text = line.split(':')[-1].strip()
-                colors = [c.strip().title() for c in colors_text.split(',')]
-                result['colors'] = colors[:3]
+            # Parse Colors - try multiple patterns
+            if 'color' in line_lower or 'colour' in line_lower:
+                if ':' in line:
+                    colors_text = line.split(':')[-1].strip()
+                else:
+                    # Try to extract after keyword
+                    for keyword in ['colors:', 'colours:', 'color:', 'colour:']:
+                        if keyword in line_lower:
+                            parts = line.split(keyword)
+                            if len(parts) > 1:
+                                colors_text = parts[1].strip()
+                                break
+                    else:
+                        colors_text = line.strip()
+                
+                if colors_text:
+                    # Split by comma, semicolon, or "and"
+                    colors = []
+                    for sep in [',', ';', ' and ', ' & ']:
+                        if sep in colors_text:
+                            colors = [c.strip().title() for c in colors_text.split(sep)]
+                            break
+                    
+                    if not colors:
+                        # Single color or space-separated
+                        colors = [colors_text.strip().title()]
+                    
+                    # Clean up colors
+                    cleaned_colors = []
+                    for c in colors:
+                        c = c.strip()
+                        if c and len(c) > 2:  # Valid color name
+                            cleaned_colors.append(c)
+                    
+                    result['colors'] = cleaned_colors[:5]  # Max 5 colors
+        
+        # Fallback: if structured parsing failed, try to extract from free text
+        if not result['gender'] and not result['age'] and not result['skin_tone']:
+            # Try to find gender in text
+            if 'male' in ai_text_lower or 'man' in ai_text_lower or 'boy' in ai_text_lower:
+                if 'female' not in ai_text_lower and 'woman' not in ai_text_lower and 'girl' not in ai_text_lower:
+                    result['gender'] = 'Male'
+            elif 'female' in ai_text_lower or 'woman' in ai_text_lower or 'girl' in ai_text_lower:
+                result['gender'] = 'Female'
+            
+            # Try to find age in text (look for numbers that could be ages)
+            import re
+            age_matches = re.findall(r'\b(\d{1,2})\b', ai_text)
+            for match in age_matches:
+                age_val = int(match)
+                if 10 <= age_val <= 100:  # Reasonable age
+                    result['age'] = age_val
+                    break
         
         return result
     
@@ -399,52 +486,152 @@ Be precise and concise. Analyze based only on what you see in the image."""
             'agreement_score': 0
         }
         
+        # Track how many comparisons we can make
+        comparisons_made = 0
+        max_possible_score = 0
+        
         # Compare Gender
-        tech_gender = technical_results.get('gender', {}).get('gender', 'Unknown')
-        ai_gender = ai_results.get('gender', 'Unknown')
-        if tech_gender and ai_gender:
-            if tech_gender.lower() == ai_gender.lower():
+        tech_gender = None
+        ai_gender = None
+        
+        # Try multiple ways to get technical gender
+        if isinstance(technical_results.get('gender'), dict):
+            tech_gender = technical_results['gender'].get('gender') or technical_results['gender'].get('detected_gender')
+        elif isinstance(technical_results.get('gender'), str):
+            tech_gender = technical_results['gender']
+        
+        # Try multiple ways to get AI gender
+        if isinstance(ai_results.get('gender'), dict):
+            ai_gender = ai_results['gender'].get('gender') or ai_results['gender'].get('detected_gender')
+        elif isinstance(ai_results.get('gender'), str):
+            ai_gender = ai_results['gender']
+        
+        if tech_gender and tech_gender != 'Unknown' and ai_gender and ai_gender != 'Unknown':
+            comparisons_made += 1
+            max_possible_score += 25
+            tech_gender_lower = str(tech_gender).lower().strip()
+            ai_gender_lower = str(ai_gender).lower().strip()
+            
+            if tech_gender_lower == ai_gender_lower:
                 comparison['agreements'].append(f"✓ Gender: Both detected {tech_gender}")
                 comparison['agreement_score'] += 25
             else:
                 comparison['differences'].append(f"⚠ Gender: Technical={tech_gender}, AI={ai_gender}")
         
         # Compare Age
-        tech_age = technical_results.get('age', {}).get('estimated_age', 0)
-        ai_age = ai_results.get('age', 0)
-        if tech_age and ai_age:
-            age_diff = abs(tech_age - ai_age)
+        tech_age = None
+        ai_age = None
+        
+        # Try multiple ways to get technical age
+        if isinstance(technical_results.get('age'), dict):
+            tech_age = technical_results['age'].get('estimated_age') or technical_results['age'].get('age')
+        elif isinstance(technical_results.get('age'), (int, float)):
+            tech_age = technical_results['age']
+        
+        # Try multiple ways to get AI age
+        if isinstance(ai_results.get('age'), dict):
+            ai_age = ai_results['age'].get('age') or ai_results['age'].get('estimated_age')
+        elif isinstance(ai_results.get('age'), (int, float)):
+            ai_age = ai_results['age']
+        
+        if tech_age and isinstance(tech_age, (int, float)) and tech_age > 0 and ai_age and isinstance(ai_age, (int, float)) and ai_age > 0:
+            comparisons_made += 1
+            max_possible_score += 25
+            age_diff = abs(float(tech_age) - float(ai_age))
             if age_diff <= 5:
-                comparison['agreements'].append(f"✓ Age: Both ~{tech_age} years (±{age_diff})")
+                comparison['agreements'].append(f"✓ Age: Both ~{int(tech_age)} years (±{int(age_diff)})")
                 comparison['agreement_score'] += 25
             elif age_diff <= 10:
-                comparison['agreements'].append(f"≈ Age: Technical={tech_age}, AI={ai_age} (±{age_diff} years)")
+                comparison['agreements'].append(f"≈ Age: Technical={int(tech_age)}, AI={int(ai_age)} (±{int(age_diff)} years)")
                 comparison['agreement_score'] += 15
             else:
-                comparison['differences'].append(f"⚠ Age: Technical={tech_age}, AI={ai_age} (diff: {age_diff} years)")
+                comparison['differences'].append(f"⚠ Age: Technical={int(tech_age)}, AI={int(ai_age)} (diff: {int(age_diff)} years)")
         
         # Compare Skin Tone (general category)
-        tech_monk = technical_results.get('skin_tone', {}).get('monk_scale_level', '')
-        ai_skin = ai_results.get('skin_tone', '')
+        tech_monk = None
+        ai_skin = None
+        
+        # Try multiple ways to get technical skin tone
+        if isinstance(technical_results.get('skin_tone'), dict):
+            tech_monk = (technical_results['skin_tone'].get('monk_scale_level') or 
+                        technical_results['skin_tone'].get('monk_level') or
+                        technical_results['skin_tone'].get('monk_scale', {}).get('monk_level'))
+        elif isinstance(technical_results.get('skin_tone'), str):
+            tech_monk = technical_results['skin_tone']
+        
+        # Try multiple ways to get AI skin tone
+        if isinstance(ai_results.get('skin_tone'), dict):
+            ai_skin = ai_results['skin_tone'].get('skin_tone') or ai_results['skin_tone'].get('level')
+        elif isinstance(ai_results.get('skin_tone'), str):
+            ai_skin = ai_results['skin_tone']
+        
         if tech_monk and ai_skin:
-            # Map monk level to category
-            monk_num = int(''.join(filter(str.isdigit, tech_monk))) if tech_monk else 5
-            tech_category = 'Light' if monk_num <= 3 else 'Medium' if monk_num <= 7 else 'Deep'
+            comparisons_made += 1
+            max_possible_score += 25
+            tech_monk_str = str(tech_monk).strip()
+            ai_skin_str = str(ai_skin).strip()
             
-            if tech_category.lower() in ai_skin.lower():
+            # Map monk level to category
+            try:
+                monk_num = int(''.join(filter(str.isdigit, tech_monk_str))) if tech_monk_str else 5
+                tech_category = 'Light' if monk_num <= 3 else 'Medium' if monk_num <= 7 else 'Deep'
+            except:
+                tech_category = 'Medium'  # Default
+            
+            # Check if categories match (case-insensitive, partial match)
+            ai_skin_lower = ai_skin_str.lower()
+            if (tech_category.lower() in ai_skin_lower or 
+                any(word in ai_skin_lower for word in ['light', 'medium', 'deep', 'tan', 'fair', 'dark'] if tech_category.lower() in word)):
                 comparison['agreements'].append(f"✓ Skin Tone: Both in {tech_category} range")
                 comparison['agreement_score'] += 25
             else:
-                comparison['differences'].append(f"⚠ Skin: Technical={tech_monk}, AI={ai_skin}")
+                comparison['differences'].append(f"⚠ Skin: Technical={tech_monk}, AI={ai_skin_str}")
                 comparison['agreement_score'] += 10
         
         # Compare Colors (check if any overlap)
-        tech_colors = technical_results.get('best_colors', {}).get('excellent', [])
-        tech_color_names = [c.get('color_name', c.get('name', '')) for c in tech_colors[:5]]
-        ai_colors = ai_results.get('colors', [])
+        tech_colors = []
+        ai_colors = []
+        
+        # Try multiple ways to get technical colors
+        if isinstance(technical_results.get('best_colors'), dict):
+            tech_colors = (technical_results['best_colors'].get('excellent', []) or 
+                          technical_results['best_colors'].get('good', []) or
+                          technical_results['best_colors'].get('colors', []))
+        elif isinstance(technical_results.get('best_colors'), list):
+            tech_colors = technical_results['best_colors']
+        
+        # Try multiple ways to get AI colors
+        if isinstance(ai_results.get('colors'), list):
+            ai_colors = ai_results['colors']
+        elif isinstance(ai_results.get('colors'), str):
+            # Try to parse comma-separated colors
+            ai_colors = [c.strip() for c in str(ai_results['colors']).split(',')]
+        
+        tech_color_names = []
+        for c in tech_colors[:5]:
+            if isinstance(c, dict):
+                tech_color_names.append(c.get('color_name') or c.get('name') or '')
+            elif isinstance(c, str):
+                tech_color_names.append(c)
+        
+        tech_color_names = [c for c in tech_color_names if c and c.strip()]
+        ai_colors = [str(c).strip() for c in ai_colors if c and str(c).strip()]
         
         if tech_color_names and ai_colors:
-            overlap = any(tc.lower() in [ac.lower() for ac in ai_colors] for tc in tech_color_names)
+            comparisons_made += 1
+            max_possible_score += 25
+            # Check for overlap (case-insensitive, partial matching)
+            overlap = False
+            for tc in tech_color_names:
+                tc_lower = tc.lower()
+                for ac in ai_colors:
+                    ac_lower = ac.lower()
+                    if tc_lower in ac_lower or ac_lower in tc_lower:
+                        overlap = True
+                        break
+                if overlap:
+                    break
+            
             if overlap:
                 comparison['agreements'].append(f"✓ Colors: Some overlap detected")
                 comparison['agreement_score'] += 25
@@ -452,8 +639,19 @@ Be precise and concise. Analyze based only on what you see in the image."""
                 comparison['agreements'].append(f"≈ Colors: Different recommendations (both valid)")
                 comparison['agreement_score'] += 10
         
-        # Calculate final score
-        comparison['agreement_score'] = min(comparison['agreement_score'], 100)
+        # If no comparisons could be made, provide helpful message
+        if comparisons_made == 0:
+            comparison['agreements'].append("ℹ️ Limited data available for comparison")
+            comparison['agreement_score'] = 50  # Neutral score when data is limited
+            comparison['message'] = 'Some analysis data was missing, so full comparison was not possible'
+        else:
+            # Normalize score if we couldn't compare all aspects
+            if max_possible_score > 0:
+                # Scale to 100% based on what we could compare
+                comparison['agreement_score'] = min(100, int((comparison['agreement_score'] / max_possible_score) * 100))
+        
+        # Ensure score is at least 0 and at most 100
+        comparison['agreement_score'] = max(0, min(100, comparison['agreement_score']))
         
         return comparison
     
@@ -732,6 +930,100 @@ Keep response under 50 words."""
         
         logger.info(f"💡 Generated smart personalized tips (randomized) using colors: {color1}, {color2}, {color3}, {color4}")
         return selected_tips
+    
+    def get_chatbot_response(self, user_message: str, context: Dict = None) -> str:
+        """
+        Get chatbot response for conversational fashion advice
+        
+        Args:
+            user_message: User's message/question
+            context: Optional context dict with user analysis data
+        
+        Returns:
+            Bot response string
+        """
+        try:
+            # Refresh AI availability
+            self._check_ollama_availability()
+            
+            if not self.use_ai:
+                # Fallback to template responses
+                return self._get_template_chatbot_response(user_message, context)
+            
+            # Use AI for response
+            import requests
+            
+            # Build context-aware prompt
+            prompt = f"""You are a friendly fashion stylist chatbot. The user asks: "{user_message}"
+
+"""
+            
+            if context:
+                skin_info = context.get('skin_tone', {})
+                gender = context.get('gender', {}).get('gender', 'Person')
+                age_group = context.get('age', {}).get('age_group', 'Adult')
+                
+                if skin_info:
+                    monk_scale = skin_info.get('monk_scale', {})
+                    monk_level = monk_scale.get('monk_level', skin_info.get('monk_scale_level', 'MST-5'))
+                    colors = context.get('recommendations', {}).get('color_analysis', {}).get('excellent_colors', [])
+                    color_names = [c.get('name', c.get('color_name', '')) for c in colors[:3] if c]
+                    
+                    prompt += f"""User Profile:
+- Gender: {gender}
+- Age Group: {age_group}
+- Skin Tone: {monk_level}
+- Best Colors: {', '.join(color_names) if color_names else 'Various'}
+
+"""
+            
+            prompt += """Give a helpful, friendly fashion advice response. Keep it concise (2-3 sentences). Be conversational and helpful."""
+            
+            # Call Ollama
+            payload = {
+                "model": self.ollama_model,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "temperature": 0.7,
+                    "num_predict": 150
+                }
+            }
+            
+            response = self._call_generate(payload, timeout=30, retries=1)
+            
+            if response and response.status_code == 200:
+                result = response.json()
+                ai_text = result.get('response', '').strip()
+                return ai_text if ai_text else self._get_template_chatbot_response(user_message, context)
+            else:
+                return self._get_template_chatbot_response(user_message, context)
+                
+        except Exception as e:
+            logger.error(f"Chatbot error: {e}")
+            return self._get_template_chatbot_response(user_message, context)
+    
+    def _get_template_chatbot_response(self, user_message: str, context: Dict = None) -> str:
+        """Fallback template responses for chatbot"""
+        message_lower = user_message.lower()
+        
+        if any(word in message_lower for word in ['color', 'colour', 'what color', 'which color']):
+            return "Based on your skin tone analysis, I recommend colors that complement your complexion. Try navy blue, burgundy, or emerald green for best results! These colors will enhance your natural features."
+        
+        elif any(word in message_lower for word in ['outfit', 'wear', 'what to wear', 'what should i wear']):
+            return "For a great outfit, start with your best colors and build from there. A well-fitted piece in your top color will make you look confident and polished! Consider the occasion and choose pieces that make you feel comfortable and stylish."
+        
+        elif any(word in message_lower for word in ['style', 'fashion', 'tips', 'advice']):
+            return "Fashion is about confidence! Choose pieces that fit well and colors that make you feel great. Your best colors will enhance your natural features. Remember, the best outfit is one that makes you feel like the best version of yourself!"
+        
+        elif any(word in message_lower for word in ['hello', 'hi', 'hey', 'greetings']):
+            return "Hello! I'm your AI fashion stylist. I can help you with color recommendations, outfit suggestions, and styling tips based on your skin tone analysis. What would you like to know?"
+        
+        elif any(word in message_lower for word in ['help', 'what can you do']):
+            return "I can help you with:\n• Color recommendations based on your skin tone\n• Outfit suggestions for different occasions\n• Styling tips and fashion advice\n• Answering questions about fashion and style\n\nJust ask me anything about fashion!"
+        
+        else:
+            return "I'm here to help with fashion advice! Ask me about colors, outfits, styling tips, or anything related to fashion based on your analysis. What would you like to know?"
 
 
 # Global instance

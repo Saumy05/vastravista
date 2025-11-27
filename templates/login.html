@@ -1,49 +1,402 @@
 {% extends "base.html" %}
-{% block title %}Login{% endblock %}
+{% block title %}Login - VastraVista{% endblock %}
+{% block extra_css %}
+<style>
+  .login-container {
+    min-height: calc(100vh - 200px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1rem;
+  }
+  
+  .login-card {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 24px;
+    padding: 3rem;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.15), 0 0 40px rgba(102, 126, 234, 0.1);
+    max-width: 450px;
+    width: 100%;
+    animation: slideInUp 0.6s ease-out;
+  }
+  
+  @keyframes slideInUp {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .login-header {
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+  
+  .login-header h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 2.5em;
+    font-weight: 800;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 0.5rem;
+  }
+  
+  .login-header p {
+    color: #666;
+    font-size: 1.05em;
+  }
+  
+  .form-group {
+    margin-bottom: 1.5rem;
+  }
+  
+  .form-label {
+    display: block;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 0.5rem;
+    font-size: 0.95em;
+  }
+  
+  .form-control {
+    width: 100%;
+    padding: 0.875rem 1rem;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    font-size: 1em;
+    transition: all 0.3s ease;
+    background: white;
+  }
+  
+  .form-control:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+  }
+  
+  .input-group {
+    display: flex;
+    gap: 0.5rem;
+  }
+  
+  .input-group .form-control {
+    flex: 1;
+  }
+  
+  .password-toggle {
+    padding: 0.875rem 1rem;
+    background: #f8f9fa;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 600;
+    color: #667eea;
+    white-space: nowrap;
+  }
+  
+  .password-toggle:hover {
+    background: #667eea;
+    color: white;
+    border-color: #667eea;
+  }
+  
+  .form-check {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+  
+  .form-check-input {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: #667eea;
+  }
+  
+  .form-check-label {
+    cursor: pointer;
+    color: #555;
+    font-size: 0.95em;
+  }
+  
+  .btn-login {
+    width: 100%;
+    padding: 1rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 1.05em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .btn-login:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+  }
+  
+  .btn-login:active {
+    transform: translateY(0);
+  }
+  
+  .btn-login:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+  
+  .login-footer {
+    text-align: center;
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #e0e0e0;
+  }
+  
+  .login-footer a {
+    color: #667eea;
+    text-decoration: none;
+    font-weight: 600;
+    transition: all 0.3s ease;
+  }
+  
+  .login-footer a:hover {
+    color: #764ba2;
+    text-decoration: underline;
+  }
+  
+  .forgot-password {
+    text-align: right;
+    margin-top: 0.5rem;
+  }
+  
+  .forgot-password a {
+    color: #667eea;
+    text-decoration: none;
+    font-size: 0.9em;
+    font-weight: 500;
+  }
+  
+  .forgot-password a:hover {
+    text-decoration: underline;
+  }
+  
+  .alert {
+    border-radius: 12px;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    border: none;
+    animation: slideInDown 0.5s ease-out;
+  }
+  
+  @keyframes slideInDown {
+    from {
+      opacity: 0;
+      transform: translateY(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .loading-spinner {
+    display: none;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-top: 3px solid white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 0.5rem;
+  }
+  
+  .btn-login.loading .loading-spinner {
+    display: inline-block;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  @media (max-width: 768px) {
+    .login-card {
+      padding: 2rem 1.5rem;
+    }
+    
+    .login-header h1 {
+      font-size: 2em;
+    }
+  }
+</style>
+{% endblock %}
 {% block content %}
-<div class="container py-5" style="max-width: 480px;">
-  <div class="glass-card p-4">
-    <h2 class="mb-3">Login</h2>
-    <form method="POST" action="{{ url_for('auth.login') }}" id="loginForm">
-      <div class="mb-3">
-        <label class="form-label">Email</label>
-        <input type="email" name="email" class="form-control" required />
+<div class="login-container">
+  <div class="login-card">
+    <div class="login-header">
+      <h1>🎨 Welcome Back</h1>
+      <p>Sign in to continue your fashion journey</p>
+    </div>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+            <strong>
+              {% if category == 'success' %}✓{% elif category == 'danger' %}✗{% elif category == 'info' %}ℹ{% elif category == 'warning' %}⚠{% endif %}
+            </strong>
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+    
+    <form method="POST" action="{{ url_for('auth.login') }}" id="loginForm" novalidate>
+      <div class="form-group">
+        <label for="email" class="form-label">Email Address</label>
+        <input 
+          type="email" 
+          name="email" 
+          id="email"
+          class="form-control" 
+          placeholder="your.email@example.com"
+          required 
+          autocomplete="email"
+          autofocus
+        />
+        <div class="invalid-feedback"></div>
       </div>
-      <div class="mb-3">
-        <label class="form-label">Password</label>
+      
+      <div class="form-group">
+        <label for="loginPassword" class="form-label">Password</label>
         <div class="input-group">
-          <input type="password" name="password" class="form-control" id="loginPassword" required />
-          <button class="btn btn-outline-secondary" type="button" id="toggleLoginPassword" aria-label="Show password">Show</button>
+          <input 
+            type="password" 
+            name="password" 
+            class="form-control" 
+            id="loginPassword" 
+            placeholder="Enter your password"
+            required 
+            autocomplete="current-password"
+          />
+          <button 
+            class="password-toggle" 
+            type="button" 
+            id="toggleLoginPassword" 
+            aria-label="Toggle password visibility"
+          >
+            👁️
+          </button>
+        </div>
+        <div class="invalid-feedback"></div>
+        <div class="forgot-password">
+          <a href="{{ url_for('auth.forgot_password') }}">Forgot password?</a>
         </div>
       </div>
-      <div class="mb-3">
-        <label class="form-label">Region</label>
-        <select name="region" class="form-select" aria-label="Select region">
-          <option value="" selected>Choose...</option>
-          <option value="in">India</option>
-          <option value="us">United States</option>
-          <option value="eu">Europe</option>
-        </select>
+      
+      <div class="form-check">
+        <input 
+          class="form-check-input" 
+          type="checkbox" 
+          value="1" 
+          id="rememberMe" 
+          name="remember"
+        />
+        <label class="form-check-label" for="rememberMe">
+          Remember me for 30 days
+        </label>
       </div>
-      <div class="form-check mb-3">
-        <input class="form-check-input" type="checkbox" value="1" id="rememberMe" name="remember">
-        <label class="form-check-label" for="rememberMe">Remember me</label>
-      </div>
-      <button type="submit" class="btn btn-primary w-100">Login</button>
+      
+      <button type="submit" class="btn-login" id="loginSubmitBtn">
+        <span class="loading-spinner"></span>
+        <span>Sign In</span>
+      </button>
     </form>
-    <div class="mt-3 text-center">
-      <a href="{{ url_for('auth.signup') }}">Create account</a>
+    
+    <div class="login-footer">
+      <p>Don't have an account? <a href="{{ url_for('auth.signup') }}">Sign up here</a></p>
     </div>
   </div>
 </div>
+
 <script>
+  // Password toggle
   const toggleLoginPassword = document.getElementById('toggleLoginPassword');
   const loginPassword = document.getElementById('loginPassword');
+  
   toggleLoginPassword.addEventListener('click', () => {
     const isPwd = loginPassword.type === 'password';
     loginPassword.type = isPwd ? 'text' : 'password';
-    toggleLoginPassword.textContent = isPwd ? 'Hide' : 'Show';
+    toggleLoginPassword.textContent = isPwd ? '🙈' : '👁️';
     toggleLoginPassword.setAttribute('aria-label', isPwd ? 'Hide password' : 'Show password');
+  });
+  
+  // Form validation
+  const loginForm = document.getElementById('loginForm');
+  const loginSubmitBtn = document.getElementById('loginSubmitBtn');
+  
+  loginForm.addEventListener('submit', function(e) {
+    const email = document.getElementById('email').value.trim();
+    const password = loginPassword.value;
+    
+    // Basic validation
+    if (!email || !password) {
+      e.preventDefault();
+      alert('Please fill in all fields');
+      return false;
+    }
+    
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      e.preventDefault();
+      alert('Please enter a valid email address');
+      return false;
+    }
+    
+    // Show loading state
+    loginSubmitBtn.classList.add('loading');
+    loginSubmitBtn.disabled = true;
+    loginSubmitBtn.querySelector('span:last-child').textContent = 'Signing in...';
+  });
+  
+  // Real-time email validation
+  const emailInput = document.getElementById('email');
+  emailInput.addEventListener('blur', function() {
+    const email = this.value.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    
+    if (email && !emailRegex.test(email)) {
+      this.classList.add('is-invalid');
+      const feedback = this.nextElementSibling;
+      if (feedback) {
+        feedback.textContent = 'Please enter a valid email address';
+        feedback.style.display = 'block';
+      }
+    } else {
+      this.classList.remove('is-invalid');
+      const feedback = this.nextElementSibling;
+      if (feedback) {
+        feedback.style.display = 'none';
+      }
+    }
   });
 </script>
 {% endblock %}

@@ -1,49 +1,584 @@
 {% extends "base.html" %}
-{% block title %}Sign Up{% endblock %}
+{% block title %}Sign Up - VastraVista{% endblock %}
+{% block extra_css %}
+<style>
+  .signup-container {
+    min-height: calc(100vh - 200px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1rem;
+  }
+  
+  .signup-card {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 24px;
+    padding: 3rem;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.15), 0 0 40px rgba(102, 126, 234, 0.1);
+    max-width: 500px;
+    width: 100%;
+    animation: slideInUp 0.6s ease-out;
+  }
+  
+  @keyframes slideInUp {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .signup-header {
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+  
+  .signup-header h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 2.5em;
+    font-weight: 800;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 0.5rem;
+  }
+  
+  .signup-header p {
+    color: #666;
+    font-size: 1.05em;
+  }
+  
+  .form-group {
+    margin-bottom: 1.5rem;
+  }
+  
+  .form-label {
+    display: block;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 0.5rem;
+    font-size: 0.95em;
+  }
+  
+  .form-control {
+    width: 100%;
+    padding: 0.875rem 1rem;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    font-size: 1em;
+    transition: all 0.3s ease;
+    background: white;
+  }
+  
+  .form-control:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+  }
+  
+  .form-control.is-invalid {
+    border-color: #dc3545;
+  }
+  
+  .form-control.is-valid {
+    border-color: #28a745;
+  }
+  
+  .invalid-feedback {
+    display: none;
+    color: #dc3545;
+    font-size: 0.875em;
+    margin-top: 0.25rem;
+  }
+  
+  .form-control.is-invalid ~ .invalid-feedback {
+    display: block;
+  }
+  
+  .valid-feedback {
+    display: none;
+    color: #28a745;
+    font-size: 0.875em;
+    margin-top: 0.25rem;
+  }
+  
+  .form-control.is-valid ~ .valid-feedback {
+    display: block;
+  }
+  
+  .input-group {
+    display: flex;
+    gap: 0.5rem;
+  }
+  
+  .input-group .form-control {
+    flex: 1;
+  }
+  
+  .password-toggle {
+    padding: 0.875rem 1rem;
+    background: #f8f9fa;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 600;
+    color: #667eea;
+    white-space: nowrap;
+  }
+  
+  .password-toggle:hover {
+    background: #667eea;
+    color: white;
+    border-color: #667eea;
+  }
+  
+  .password-strength {
+    margin-top: 0.5rem;
+    height: 4px;
+    background: #e0e0e0;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  
+  .password-strength-bar {
+    height: 100%;
+    width: 0%;
+    transition: all 0.3s ease;
+    border-radius: 2px;
+  }
+  
+  .password-strength.weak .password-strength-bar {
+    width: 33%;
+    background: #dc3545;
+  }
+  
+  .password-strength.medium .password-strength-bar {
+    width: 66%;
+    background: #ffc107;
+  }
+  
+  .password-strength.strong .password-strength-bar {
+    width: 100%;
+    background: #28a745;
+  }
+  
+  .password-requirements {
+    margin-top: 0.5rem;
+    font-size: 0.85em;
+    color: #666;
+  }
+  
+  .password-requirements ul {
+    list-style: none;
+    padding: 0;
+    margin: 0.5rem 0 0 0;
+  }
+  
+  .password-requirements li {
+    padding: 0.25rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  .password-requirements li.valid {
+    color: #28a745;
+  }
+  
+  .password-requirements li.invalid {
+    color: #dc3545;
+  }
+  
+  .btn-signup {
+    width: 100%;
+    padding: 1rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 1.05em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .btn-signup:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+  }
+  
+  .btn-signup:active:not(:disabled) {
+    transform: translateY(0);
+  }
+  
+  .btn-signup:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+  
+  .signup-footer {
+    text-align: center;
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #e0e0e0;
+  }
+  
+  .signup-footer a {
+    color: #667eea;
+    text-decoration: none;
+    font-weight: 600;
+    transition: all 0.3s ease;
+  }
+  
+  .signup-footer a:hover {
+    color: #764ba2;
+    text-decoration: underline;
+  }
+  
+  .loading-spinner {
+    display: none;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-top: 3px solid white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 0.5rem;
+  }
+  
+  .btn-signup.loading .loading-spinner {
+    display: inline-block;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  @media (max-width: 768px) {
+    .signup-card {
+      padding: 2rem 1.5rem;
+    }
+    
+    .signup-header h1 {
+      font-size: 2em;
+    }
+  }
+</style>
+{% endblock %}
 {% block content %}
-<div class="container py-5" style="max-width: 520px;">
-  <div class="glass-card p-4">
-    <h2 class="mb-3">Sign Up</h2>
-    <form method="POST" action="{{ url_for('auth.signup') }}" id="signupForm">
-      <div class="mb-3">
-        <label class="form-label">Email</label>
-        <input type="email" name="email" class="form-control" required />
+<div class="signup-container">
+  <div class="signup-card">
+    <div class="signup-header">
+      <h1>🎨 Join VastraVista</h1>
+      <p>Start your personalized fashion journey</p>
+    </div>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+            <strong>
+              {% if category == 'success' %}✓{% elif category == 'danger' %}✗{% elif category == 'info' %}ℹ{% elif category == 'warning' %}⚠{% endif %}
+            </strong>
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+    
+    <form method="POST" action="{{ url_for('auth.signup') }}" id="signupForm" novalidate>
+      <div class="form-group">
+        <label for="email" class="form-label">Email Address</label>
+        <input 
+          type="email" 
+          name="email" 
+          id="email"
+          class="form-control" 
+          placeholder="your.email@example.com"
+          required 
+          autocomplete="email"
+          autofocus
+        />
+        <div class="invalid-feedback">Please enter a valid email address</div>
+        <div class="valid-feedback">Looks good!</div>
       </div>
-      <div class="mb-3">
-        <label class="form-label">Username</label>
-        <input type="text" name="username" class="form-control" required />
+      
+      <div class="form-group">
+        <label for="username" class="form-label">Username</label>
+        <input 
+          type="text" 
+          name="username" 
+          id="username"
+          class="form-control" 
+          placeholder="Choose a username"
+          required 
+          autocomplete="username"
+          minlength="3"
+          maxlength="30"
+          pattern="[a-zA-Z0-9_]+"
+        />
+        <div class="invalid-feedback">Username must be 3-30 characters (letters, numbers, underscore only)</div>
+        <div class="valid-feedback">Looks good!</div>
       </div>
-      <div class="mb-3">
-        <label class="form-label">Password</label>
+      
+      <div class="form-group">
+        <label for="signupPassword" class="form-label">Password</label>
         <div class="input-group">
-          <input type="password" name="password" class="form-control" id="signupPassword" required />
-          <button class="btn btn-outline-secondary" type="button" id="toggleSignupPassword" aria-label="Show password">Show</button>
+          <input 
+            type="password" 
+            name="password" 
+            class="form-control" 
+            id="signupPassword" 
+            placeholder="Create a strong password"
+            required 
+            autocomplete="new-password"
+            minlength="8"
+          />
+          <button 
+            class="password-toggle" 
+            type="button" 
+            id="toggleSignupPassword" 
+            aria-label="Toggle password visibility"
+          >
+            👁️
+          </button>
         </div>
+        <div class="password-strength" id="passwordStrength">
+          <div class="password-strength-bar"></div>
+        </div>
+        <div class="password-requirements" id="passwordRequirements">
+          <ul>
+            <li id="req-length" class="invalid">✓ At least 8 characters</li>
+            <li id="req-uppercase" class="invalid">✓ One uppercase letter</li>
+            <li id="req-lowercase" class="invalid">✓ One lowercase letter</li>
+            <li id="req-number" class="invalid">✓ One number</li>
+            <li id="req-special" class="invalid">✓ One special character</li>
+          </ul>
+        </div>
+        <div class="invalid-feedback">Password must meet all requirements</div>
       </div>
-      <div class="mb-3">
-        <label class="form-label">Region</label>
-        <select name="region" class="form-select" aria-label="Select region">
-          <option value="" selected>Choose...</option>
-          <option value="in">India</option>
-          <option value="us">United States</option>
-          <option value="eu">Europe</option>
-        </select>
-      </div>
-      <button type="submit" class="btn btn-success w-100">Create Account</button>
+      
+      <button type="submit" class="btn-signup" id="signupSubmitBtn">
+        <span class="loading-spinner"></span>
+        <span>Create Account</span>
+      </button>
     </form>
-    <div class="mt-3 text-center">
-      <a href="{{ url_for('auth.login') }}">Already have an account? Login</a>
+    
+    <div class="signup-footer">
+      <p>Already have an account? <a href="{{ url_for('auth.login') }}">Sign in here</a></p>
     </div>
   </div>
 </div>
+
 <script>
+  // Password toggle
   const toggleSignupPassword = document.getElementById('toggleSignupPassword');
   const signupPassword = document.getElementById('signupPassword');
+  
   toggleSignupPassword.addEventListener('click', () => {
     const isPwd = signupPassword.type === 'password';
     signupPassword.type = isPwd ? 'text' : 'password';
-    toggleSignupPassword.textContent = isPwd ? 'Hide' : 'Show';
+    toggleSignupPassword.textContent = isPwd ? '🙈' : '👁️';
     toggleSignupPassword.setAttribute('aria-label', isPwd ? 'Hide password' : 'Show password');
+  });
+  
+  // Password strength checker
+  function checkPasswordStrength(password) {
+    const requirements = {
+      length: password.length >= 8,
+      uppercase: /[A-Z]/.test(password),
+      lowercase: /[a-z]/.test(password),
+      number: /[0-9]/.test(password),
+      special: /[!@#$%^&*(),.?":{}|<>]/.test(password)
+    };
+    
+    const strengthBar = document.getElementById('passwordStrength');
+    const reqLength = document.getElementById('req-length');
+    const reqUppercase = document.getElementById('req-uppercase');
+    const reqLowercase = document.getElementById('req-lowercase');
+    const reqNumber = document.getElementById('req-number');
+    const reqSpecial = document.getElementById('req-special');
+    
+    // Update requirement indicators
+    reqLength.classList.toggle('valid', requirements.length);
+    reqLength.classList.toggle('invalid', !requirements.length);
+    reqUppercase.classList.toggle('valid', requirements.uppercase);
+    reqUppercase.classList.toggle('invalid', !requirements.uppercase);
+    reqLowercase.classList.toggle('valid', requirements.lowercase);
+    reqLowercase.classList.toggle('invalid', !requirements.lowercase);
+    reqNumber.classList.toggle('valid', requirements.number);
+    reqNumber.classList.toggle('invalid', !requirements.number);
+    reqSpecial.classList.toggle('valid', requirements.special);
+    reqSpecial.classList.toggle('invalid', !requirements.special);
+    
+    // Calculate strength
+    const metCount = Object.values(requirements).filter(r => r).length;
+    strengthBar.classList.remove('weak', 'medium', 'strong');
+    
+    if (metCount < 3) {
+      strengthBar.classList.add('weak');
+    } else if (metCount < 5) {
+      strengthBar.classList.add('medium');
+    } else {
+      strengthBar.classList.add('strong');
+    }
+    
+    return Object.values(requirements).every(r => r);
+  }
+  
+  signupPassword.addEventListener('input', function() {
+    const password = this.value;
+    const isValid = checkPasswordStrength(password);
+    
+    if (password.length > 0) {
+      if (isValid) {
+        this.classList.remove('is-invalid');
+        this.classList.add('is-valid');
+      } else {
+        this.classList.remove('is-valid');
+        this.classList.add('is-invalid');
+      }
+    } else {
+      this.classList.remove('is-valid', 'is-invalid');
+    }
+  });
+  
+  // Form validation
+  const signupForm = document.getElementById('signupForm');
+  const signupSubmitBtn = document.getElementById('signupSubmitBtn');
+  const emailInput = document.getElementById('email');
+  const usernameInput = document.getElementById('username');
+  
+  // Email validation
+  emailInput.addEventListener('blur', function() {
+    const email = this.value.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    
+    if (email && emailRegex.test(email)) {
+      this.classList.remove('is-invalid');
+      this.classList.add('is-valid');
+    } else if (email) {
+      this.classList.remove('is-valid');
+      this.classList.add('is-invalid');
+    }
+  });
+  
+  // Username validation with real-time availability check
+  let usernameCheckTimeout;
+  const usernameFeedback = document.createElement('div');
+  usernameFeedback.className = 'username-feedback';
+  usernameFeedback.style.cssText = 'margin-top: 0.5rem; font-size: 0.85em; font-weight: 500;';
+  usernameInput.parentNode.appendChild(usernameFeedback);
+  
+  usernameInput.addEventListener('input', function() {
+    const username = this.value.trim();
+    const usernameRegex = /^[a-zA-Z0-9_]+$/;
+    
+    // Clear previous timeout
+    clearTimeout(usernameCheckTimeout);
+    
+    // Remove previous feedback
+    usernameFeedback.textContent = '';
+    usernameFeedback.className = 'username-feedback';
+    
+    if (username.length > 0) {
+      if (username.length >= 3 && username.length <= 30 && usernameRegex.test(username)) {
+        // Show checking message
+        usernameFeedback.textContent = '⏳ Checking availability...';
+        usernameFeedback.style.color = '#667eea';
+        
+        // Debounce API call
+        usernameCheckTimeout = setTimeout(async () => {
+          try {
+            const response = await fetch('/api/check-username', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ username: username })
+            });
+            
+            const data = await response.json();
+            
+            if (data.available) {
+              this.classList.remove('is-invalid');
+              this.classList.add('is-valid');
+              usernameFeedback.textContent = '✓ ' + data.message;
+              usernameFeedback.style.color = '#28a745';
+              usernameFeedback.className = 'username-feedback valid';
+            } else {
+              this.classList.remove('is-valid');
+              this.classList.add('is-invalid');
+              usernameFeedback.textContent = '✗ ' + data.message;
+              usernameFeedback.style.color = '#dc3545';
+              usernameFeedback.className = 'username-feedback invalid';
+            }
+          } catch (error) {
+            console.error('Username check error:', error);
+            usernameFeedback.textContent = '⚠ Error checking availability';
+            usernameFeedback.style.color = '#ffc107';
+          }
+        }, 500); // Wait 500ms after user stops typing
+      } else {
+        this.classList.remove('is-valid', 'is-invalid');
+        usernameFeedback.textContent = 'Username must be 3-30 characters (letters, numbers, underscore only)';
+        usernameFeedback.style.color = '#dc3545';
+      }
+    } else {
+      this.classList.remove('is-valid', 'is-invalid');
+      usernameFeedback.textContent = '';
+    }
+  });
+  
+  signupForm.addEventListener('submit', function(e) {
+    const email = emailInput.value.trim();
+    const username = usernameInput.value.trim();
+    const password = signupPassword.value;
+    
+    // Validate email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
+      e.preventDefault();
+      emailInput.classList.add('is-invalid');
+      emailInput.focus();
+      return false;
+    }
+    
+    // Validate username
+    const usernameRegex = /^[a-zA-Z0-9_]+$/;
+    if (!username || username.length < 3 || username.length > 30 || !usernameRegex.test(username)) {
+      e.preventDefault();
+      usernameInput.classList.add('is-invalid');
+      usernameInput.focus();
+      return false;
+    }
+    
+    // Validate password
+    if (!checkPasswordStrength(password)) {
+      e.preventDefault();
+      signupPassword.classList.add('is-invalid');
+      signupPassword.focus();
+      return false;
+    }
+    
+    // Show loading state
+    signupSubmitBtn.classList.add('loading');
+    signupSubmitBtn.disabled = true;
+    signupSubmitBtn.querySelector('span:last-child').textContent = 'Creating account...';
   });
 </script>
 {% endblock %}

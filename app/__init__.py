@@ -88,14 +88,39 @@ def create_app(config_name='development'):
         app.logger.warning('⚠️ Flask-Login not available')
     
     from app.api.auth import auth_bp
+    from app.api.stats import stats_bp
+    from app.api.ar_api import ar_api_bp
     app.register_blueprint(auth_bp)
+    app.register_blueprint(stats_bp)
+    app.register_blueprint(ar_api_bp)
     
     # Add root route redirect
     @app.route('/')
     def root():
         from flask import url_for
+        from flask_login import current_user
+        # Redirect to dashboard if logged in, otherwise login
+        if current_user.is_authenticated:
+            return redirect(url_for('auth.dashboard'))
         return redirect(url_for('auth.login'))
     
-    app.logger.info('✅ Auth-only application initialized')
+    # Error handlers
+    @app.errorhandler(404)
+    def not_found_error(error):
+        from flask import render_template
+        from flask_login import current_user
+        return render_template('errors/404.html', current_user=current_user), 404
+    
+    @app.errorhandler(500)
+    def internal_error(error):
+        from flask import render_template
+        from flask_login import current_user
+        try:
+            db.session.rollback()
+        except:
+            pass
+        return render_template('errors/500.html', current_user=current_user), 500
+    
+    app.logger.info('✅ Application initialized successfully')
     
     return app

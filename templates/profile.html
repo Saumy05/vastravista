@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+{% block title %}Profile - VastraVista{% endblock %}
+{% block extra_css %}
+<style>
+  .profile-container {
+    max-width: 800px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+  }
+  
+  .profile-card {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 24px;
+    padding: 3rem;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.15), 0 0 40px rgba(102, 126, 234, 0.1);
+    animation: slideInUp 0.6s ease-out;
+  }
+  
+  @keyframes slideInUp {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .profile-header {
+    text-align: center;
+    margin-bottom: 2rem;
+    padding-bottom: 2rem;
+    border-bottom: 2px solid #e0e0e0;
+  }
+  
+  .profile-avatar {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3em;
+    color: white;
+    margin: 0 auto 1rem;
+    box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
+  }
+  
+  .profile-header h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 2.5em;
+    font-weight: 800;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 0.5rem;
+  }
+  
+  .form-group {
+    margin-bottom: 1.5rem;
+  }
+  
+  .form-label {
+    display: block;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 0.5rem;
+    font-size: 0.95em;
+  }
+  
+  .form-control {
+    width: 100%;
+    padding: 0.875rem 1rem;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    font-size: 1em;
+    transition: all 0.3s ease;
+    background: white;
+  }
+  
+  .form-control:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+  }
+  
+  .form-control:disabled {
+    background: #f8f9fa;
+    cursor: not-allowed;
+  }
+  
+  .btn-save {
+    padding: 1rem 2rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 1.05em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+  }
+  
+  .btn-save:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+  }
+  
+  .btn-save:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  
+  .profile-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 2px solid #e0e0e0;
+  }
+  
+  .stat-item {
+    text-align: center;
+    padding: 1.5rem;
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+    border-radius: 12px;
+  }
+  
+  .stat-value {
+    font-size: 2em;
+    font-weight: 800;
+    color: #667eea;
+    margin-bottom: 0.5rem;
+  }
+  
+  .stat-label {
+    color: #666;
+    font-size: 0.9em;
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div class="profile-container">
+  <div class="profile-card">
+    <div class="profile-header">
+      <div class="profile-avatar">
+        {{ user.username[0].upper() }}
+      </div>
+      <h1>{{ user.username }}</h1>
+      <p style="color: #666;">Member since {{ user.created_at.strftime('%B %Y') if user.created_at else 'Recently' }}</p>
+    </div>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+            <strong>
+              {% if category == 'success' %}✓{% elif category == 'danger' %}✗{% elif category == 'info' %}ℹ{% elif category == 'warning' %}⚠{% endif %}
+            </strong>
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+    
+    <form method="POST" action="{{ url_for('auth.profile') }}" id="profileForm">
+      <div class="form-group">
+        <label for="username" class="form-label">Username</label>
+        <input 
+          type="text" 
+          name="username" 
+          id="username"
+          class="form-control" 
+          value="{{ user.username }}"
+          required
+          pattern="[a-zA-Z0-9_]{3,30}"
+        />
+        <small style="color: #666; font-size: 0.85em;">3-30 characters (letters, numbers, underscore only)</small>
+      </div>
+      
+      <div class="form-group">
+        <label for="email" class="form-label">Email Address</label>
+        <input 
+          type="email" 
+          name="email" 
+          id="email"
+          class="form-control" 
+          value="{{ user.email }}"
+          required
+        />
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">Account Status</label>
+        <input 
+          type="text" 
+          class="form-control" 
+          value="{% if user.is_verified %}Verified ✓{% else %}Not Verified{% endif %}"
+          disabled
+        />
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">Last Login</label>
+        <input 
+          type="text" 
+          class="form-control" 
+          value="{{ user.last_login.strftime('%B %d, %Y at %I:%M %p') if user.last_login else 'Never' }}"
+          disabled
+        />
+      </div>
+      
+      <button type="submit" class="btn-save">Save Changes</button>
+    </form>
+    
+    <div class="profile-stats">
+      <div class="stat-item">
+        <div class="stat-value">{{ user.color_analysis.count() if user.color_analysis else 0 }}</div>
+        <div class="stat-label">Analyses</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value">
+          {% if user.created_at %}
+            {{ ((user.created_at|string|length) // 10) }}
+          {% else %}
+            0
+          {% endif %}
+        </div>
+        <div class="stat-label">Days Active</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

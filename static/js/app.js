@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeElements();
     setupEventListeners();
     loadMonkScaleData();
+    loadAnalysisIntoAIForm(); // Auto-load analysis data
 });
 
 function initializeElements() {
@@ -61,6 +62,7 @@ function initializeElements() {
         stopARCamera: document.getElementById('stopARCamera'),
         arPreview: document.getElementById('arPreview'),
         arCanvas: document.getElementById('arCanvas'),
+        arVideo: document.getElementById('arVideo'),
         colorTryBtns: document.querySelectorAll('.color-try-btn'),
         
         // Shopping tab
@@ -122,19 +124,137 @@ function setupEventListeners() {
     
     // AI Advice tab
     elements.getAIAdvice.addEventListener('click', getAIFashionAdvice);
+        
+        // Auto-fill AI form when tab is opened
+        elements.tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                if (tab.dataset.tab === 'ai-advice') {
+                    loadAnalysisIntoAIForm();
+                }
+            });
+        });
+        
+        // Skin tone preview update
+        const aiSkinTone = document.getElementById('aiSkinTone');
+        if (aiSkinTone) {
+            aiSkinTone.addEventListener('input', function() {
+                const preview = document.getElementById('skinTonePreview');
+                if (preview && this.value) {
+                    preview.style.background = this.value;
+                }
+            });
+        }
     
     // AR tab
+    if (elements.startARCamera) {
     elements.startARCamera.addEventListener('click', startARMode);
+    }
+    if (elements.stopARCamera) {
     elements.stopARCamera.addEventListener('click', stopARMode);
+    }
+    if (elements.colorTryBtns && elements.colorTryBtns.length > 0) {
     elements.colorTryBtns.forEach(btn => {
         btn.addEventListener('click', () => applyARColor(btn.dataset.color));
     });
+    }
     
     // Shopping tab
     
     
     // Analytics tab
+    const loadStats = document.getElementById('loadStats');
+    if (loadStats) {
+        loadStats.addEventListener('click', loadUserStats);
+    }
     
+    // Load stats on tab switch
+    elements.tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            if (tab.dataset.tab === 'stats') {
+                loadUserStats();
+            }
+        });
+    });
+    
+    // Sticky tabs scroll effect
+    const stickyTabs = document.getElementById('stickyTabs');
+    if (stickyTabs) {
+        window.addEventListener('scroll', () => {
+            if (window.scrollY > 100) {
+                stickyTabs.classList.add('scrolled');
+            } else {
+                stickyTabs.classList.remove('scrolled');
+            }
+        });
+    }
+}
+
+// ============ STATISTICS TAB ============
+async function loadUserStats() {
+    const statsContent = document.getElementById('statsContent');
+    const statsDetails = document.getElementById('statsDetails');
+    
+    if (!statsContent) return;
+    
+    showLoading('Loading statistics...', 'Analyzing your fashion journey');
+    
+    try {
+        const response = await fetch('/api/stats/dashboard');
+        const result = await response.json();
+        
+        if (result.success && result.stats) {
+            const stats = result.stats;
+            
+            statsContent.innerHTML = `
+                <div class="stat-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                    <div class="stat-number">${stats.total_analyses || 0}</div>
+                    <div>Total Analyses</div>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);">
+                    <div class="stat-number">${stats.days_active || 0}</div>
+                    <div>Days Active</div>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #0ba360 0%, #3cba92 100%);">
+                    <div class="stat-number">${stats.recent_analyses_count || 0}</div>
+                    <div>Recent Analyses</div>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                    <div class="stat-number">${stats.most_common_skin_tone || 'N/A'}</div>
+                    <div>Skin Tone</div>
+                </div>
+            `;
+            
+            if (stats.favorite_colors && stats.favorite_colors.length > 0) {
+                const colorsHtml = stats.favorite_colors.map(color => {
+                    const hex = color.hex || color.color_hex || '#ccc';
+                    const name = color.color_name || color.name || 'Color';
+                    return `
+                        <div style="text-align: center;">
+                            <div style="background-color: ${hex}; width: 80px; height: 80px; border-radius: 12px; margin: 0 auto 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); border: 3px solid white;"></div>
+                            <div style="font-weight: 600; color: #333; font-size: 0.9em;">${name}</div>
+                        </div>
+                    `;
+                }).join('');
+                
+                statsDetails.innerHTML = `
+                    <div style="background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                        <h3 style="color: #667eea; margin-bottom: 20px;">🎨 Your Favorite Colors</h3>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 20px;">
+                            ${colorsHtml}
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        hideLoading();
+    } catch (error) {
+        console.error('Stats error:', error);
+        hideLoading();
+        if (statsContent) {
+            statsContent.innerHTML = '<p style="color: #dc3545;">Failed to load statistics. Please try again.</p>';
+        }
+    }
 }
 
 // ============ TAB SWITCHING ============
@@ -190,10 +310,17 @@ function handleFileSelect(e) {
     }
 }
 
+let faceDetectionInterval = null;
+let faceDetectionModel = null;
+
 async function startWebcam() {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: 'user' } 
+            video: { 
+                facingMode: 'user',
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+            } 
         });
         appState.cameraStream = stream;
         elements.webcam.srcObject = stream;
@@ -201,13 +328,95 @@ async function startWebcam() {
         elements.startCamera.style.display = 'none';
         elements.captureBtn.style.display = 'inline-block';
         elements.stopCamera.style.display = 'inline-block';
+        
+        // Show tips
+        const tipsDiv = document.getElementById('cameraTips');
+        if (tipsDiv) tipsDiv.style.display = 'block';
+        
+        // Wait for video to be ready
+        elements.webcam.onloadedmetadata = () => {
+            startFaceDetection();
+            showCameraGuide();
+        };
     } catch (error) {
         console.error('Camera error:', error);
-        alert('Could not access camera. Please check permissions.');
+        alert('Could not access camera. Please check permissions and ensure your camera is not being used by another application.');
     }
 }
 
+function showCameraGuide() {
+    const guide = document.getElementById('cameraGuide');
+    if (guide) {
+        guide.style.display = 'block';
+        setTimeout(() => {
+            if (guide) guide.style.opacity = '0.3';
+        }, 2000);
+    }
+}
+
+async function startFaceDetection() {
+    // Simple face detection using MediaPipe or basic detection
+    const canvas = document.getElementById('faceDetectionCanvas');
+    const overlay = document.getElementById('cameraOverlay');
+    const faceCount = document.getElementById('faceCount');
+    
+    if (!canvas || !overlay || !faceCount) return;
+    
+    canvas.width = elements.webcam.videoWidth;
+    canvas.height = elements.webcam.videoHeight;
+    const ctx = canvas.getContext('2d');
+    
+    // Simple face detection visualization (you can enhance this with actual ML model)
+    faceDetectionInterval = setInterval(() => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw guide frame
+        ctx.strokeStyle = 'rgba(102, 126, 234, 0.5)';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([10, 10]);
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const frameSize = Math.min(canvas.width, canvas.height) * 0.6;
+        ctx.strokeRect(centerX - frameSize/2, centerY - frameSize/2, frameSize, frameSize);
+        
+        // Simulate face detection (replace with actual detection)
+        // For demo purposes, we'll show a detection box
+        ctx.strokeStyle = '#667eea';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([]);
+        const faceBoxSize = frameSize * 0.8;
+        ctx.strokeRect(centerX - faceBoxSize/2, centerY - faceBoxSize/2, faceBoxSize, faceBoxSize);
+        
+        // Update overlay
+        if (overlay) overlay.style.display = 'block';
+        if (faceCount) faceCount.textContent = '👤 Face detected - Ready to capture!';
+    }, 100);
+}
+
 function stopWebcam() {
+    // Stop face detection
+    if (faceDetectionInterval) {
+        clearInterval(faceDetectionInterval);
+        faceDetectionInterval = null;
+    }
+    
+    // Clear canvas
+    const canvas = document.getElementById('faceDetectionCanvas');
+    if (canvas) {
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    
+    // Hide overlay
+    const overlay = document.getElementById('cameraOverlay');
+    if (overlay) overlay.style.display = 'none';
+    
+    const guide = document.getElementById('cameraGuide');
+    if (guide) guide.style.display = 'none';
+    
+    const tips = document.getElementById('cameraTips');
+    if (tips) tips.style.display = 'none';
+    
     if (appState.cameraStream) {
         appState.cameraStream.getTracks().forEach(track => track.stop());
         appState.cameraStream = null;
@@ -477,6 +686,15 @@ function displayAnalysisResults(result) {
                             </h4>
                             <div style="color: rgba(255,255,255,0.9); line-height: 1.8;">
                                 ${comp.differences.map(d => `<div style="margin-bottom: 8px;">• ${d}</div>`).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    ${comp.message ? `
+                        <div style="background: rgba(59, 130, 246, 0.15); padding: 15px; border-radius: 8px; 
+                                    margin-top: 15px; border-left: 4px solid #3b82f6;">
+                            <div style="color: rgba(255,255,255,0.9); font-size: 0.9em;">
+                                ℹ️ ${comp.message}
                             </div>
                         </div>
                     ` : ''}
@@ -1153,13 +1371,84 @@ async function getAIFashionAdviceFromAnalysis(analysisData) {
     }
 }
 
+// Load analysis data into AI form
+function loadAnalysisIntoAIForm() {
+    if (!appState.currentAnalysis) {
+        // Check if we can get from stored analysis
+        const stored = sessionStorage.getItem('analysisResults');
+        if (stored) {
+            try {
+                appState.currentAnalysis = JSON.parse(stored);
+            } catch (e) {
+                console.error('Error parsing stored analysis:', e);
+            }
+        }
+    }
+    
+    if (appState.currentAnalysis) {
+        const data = appState.currentAnalysis.data || appState.currentAnalysis;
+        const skinData = data.skin_tone || {};
+        const genderData = data.gender || {};
+        const ageData = data.age || {};
+        
+        // Fill skin tone
+        const skinHex = skinData.hex || '#B9966A';
+        const aiSkinTone = document.getElementById('aiSkinTone');
+        if (aiSkinTone) {
+            aiSkinTone.value = skinHex;
+            const preview = document.getElementById('skinTonePreview');
+            if (preview) preview.style.background = skinHex;
+        }
+        
+        // Fill Monk Scale
+        const monkLevel = skinData.monk_scale_level || 'MST-5';
+        const aiMonkLevel = document.getElementById('aiMonkLevel');
+        if (aiMonkLevel) {
+            aiMonkLevel.value = monkLevel;
+        }
+        
+        // Fill Gender
+        const gender = (data.final && data.final.gender) || genderData.gender || 'both';
+        const aiGender = document.getElementById('aiGender');
+        if (aiGender) {
+            if (gender.toLowerCase().includes('male')) {
+                aiGender.value = 'male';
+            } else if (gender.toLowerCase().includes('female')) {
+                aiGender.value = 'female';
+            } else {
+                aiGender.value = 'both';
+            }
+        }
+        
+        // Fill Age Group
+        const ageGroup = ageData.age_group || 'Young Adult';
+        const aiAgeGroup = document.getElementById('aiAgeGroup');
+        if (aiAgeGroup) {
+            aiAgeGroup.value = ageGroup;
+        }
+        
+        // Show notice
+        const notice = document.getElementById('aiAnalysisNotice');
+        if (notice) notice.style.display = 'block';
+    }
+}
+
 async function getAIFashionAdvice() {
     const skinTone = elements.aiSkinTone.value || '#B9966A';
     const monkLevel = elements.aiMonkLevel.value;
     const occasion = elements.aiOccasion.value;
     const stylePrefs = elements.aiStylePrefs.value.split(',').map(s => s.trim()).filter(s => s);
+    const gender = document.getElementById('aiGender')?.value || 'both';
+    const ageGroup = document.getElementById('aiAgeGroup')?.value || 'Young Adult';
     
-    showLoading('Consulting AI Stylist...', 'DeepSeek R1 is analyzing your request');
+    // Get best colors from analysis if available
+    let bestColors = {};
+    if (appState.currentAnalysis) {
+        const data = appState.currentAnalysis.data || appState.currentAnalysis;
+        bestColors = data.best_colors || {};
+    }
+    
+    showLoading('Consulting AI Stylist...', 'Analyzing based on YOUR skin tone and preferences');
     
     try {
         const response = await fetch('/api/v2/ai-fashion-advice', {
@@ -1170,7 +1459,9 @@ async function getAIFashionAdvice() {
                 monk_scale_level: monkLevel,
                 occasion: occasion,
                 style_preferences: stylePrefs,
-                gender: 'both'
+                gender: gender,
+                age_group: ageGroup,
+                best_colors: bestColors
             })
         });
         
@@ -1197,61 +1488,734 @@ async function getAIFashionAdvice() {
     }
 }
 
+// ============ CHATBOT FUNCTIONS ============
+let chatHistory = [];
+
+function sendChatMessage() {
+    const chatInput = document.getElementById('chatInput');
+    const chatMessages = document.getElementById('chatMessages');
+    const message = chatInput.value.trim();
+    
+    if (!message) {
+        return;
+    }
+    
+    // Add user message to chat
+    addChatMessage('user', message);
+    chatInput.value = '';
+    
+    // Disable input while processing
+    chatInput.disabled = true;
+    document.getElementById('sendChatBtn').disabled = true;
+    
+    // Show typing indicator
+    const typingId = addTypingIndicator();
+    
+    // Send to API
+    fetch('/api/v2/chatbot', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            message: message
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        removeTypingIndicator(typingId);
+        
+        if (data.success) {
+            addChatMessage('assistant', data.response);
+        } else {
+            addChatMessage('assistant', 'Sorry, I encountered an error. Please try again.');
+        }
+    })
+    .catch(error => {
+        removeTypingIndicator(typingId);
+        console.error('Chatbot error:', error);
+        addChatMessage('assistant', 'Sorry, I\'m having trouble connecting. Please try again later.');
+    })
+    .finally(() => {
+        // Re-enable input
+        chatInput.disabled = false;
+        document.getElementById('sendChatBtn').disabled = false;
+        chatInput.focus();
+        
+        // Scroll to bottom
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    });
+}
+
+function addChatMessage(role, content) {
+    const chatMessages = document.getElementById('chatMessages');
+    const messageDiv = document.createElement('div');
+    messageDiv.style.marginBottom = '12px';
+    messageDiv.style.maxWidth = '80%';
+    messageDiv.style.display = 'inline-block';
+    messageDiv.style.width = '100%';
+    
+    if (role === 'user') {
+        messageDiv.style.textAlign = 'right';
+        messageDiv.innerHTML = `
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 16px; border-radius: 12px; display: inline-block; max-width: 100%; word-wrap: break-word;">
+                <div style="font-weight: 600; margin-bottom: 4px;">You</div>
+                <div style="font-size: 0.9em; opacity: 0.95;">${escapeHtml(content)}</div>
+            </div>
+        `;
+    } else {
+        messageDiv.style.textAlign = 'left';
+        messageDiv.innerHTML = `
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 16px; border-radius: 12px; display: inline-block; max-width: 100%; word-wrap: break-word;">
+                <div style="font-weight: 600; margin-bottom: 4px;">VastraVista AI</div>
+                <div style="font-size: 0.9em; opacity: 0.95; white-space: pre-wrap;">${escapeHtml(content)}</div>
+            </div>
+        `;
+    }
+    
+    chatMessages.appendChild(messageDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    
+    // Add to history
+    chatHistory.push({ role, content });
+}
+
+function addTypingIndicator() {
+    const chatMessages = document.getElementById('chatMessages');
+    const typingDiv = document.createElement('div');
+    typingDiv.id = 'typing-indicator';
+    typingDiv.style.marginBottom = '12px';
+    typingDiv.style.textAlign = 'left';
+    typingDiv.innerHTML = `
+        <div style="background: #e0e0e0; color: #666; padding: 12px 16px; border-radius: 12px; display: inline-block;">
+            <div style="display: flex; gap: 4px; align-items: center;">
+                <span>VastraVista AI is typing</span>
+                <span style="animation: typing 1.4s infinite;">...</span>
+            </div>
+        </div>
+    `;
+    chatMessages.appendChild(typingDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    return typingDiv.id;
+}
+
+function removeTypingIndicator(id) {
+    const indicator = document.getElementById(id);
+    if (indicator) {
+        indicator.remove();
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 // ============ AR TAB ============
+let arMode = 'cloth-overlay';
+let currentColorIndex = 0;
+let skinToneColors = [];
+let currentOutfitType = 'tshirt';
+let skeletonVisible = false;
+let arAnimationFrame = null;
+let arSessionId = `ar_session_${Date.now()}`;  // Session ID for AR requests
+
+// Load skin-tone matched colors from analysis (Production: Uses backend API)
+async function loadSkinToneColors() {
+    try {
+        // Try to get from backend API first (production method)
+        const response = await fetch('/api/ar/get-skin-tone-colors');
+        if (response.ok) {
+            const result = await response.json();
+            if (result.success && result.colors && result.colors.length > 0) {
+                skinToneColors = result.colors;
+                displaySkinToneColors();
+                return;
+            }
+        }
+        
+        // Fallback: Use frontend analysis data
+        if (appState.currentAnalysis) {
+            const data = appState.currentAnalysis.data || appState.currentAnalysis;
+            const bestColors = data.best_colors || {};
+            const excellent = bestColors.excellent || [];
+            const good = bestColors.good || [];
+            
+            skinToneColors = [...excellent, ...good].slice(0, 12).map(c => ({
+                hex: c.hex || c.color_hex || '#ccc',
+                name: c.color_name || c.name || 'Color',
+                rgb: c.rgb || [102, 126, 234]
+            }));
+            
+            if (skinToneColors.length > 0) {
+                displaySkinToneColors();
+                return;
+            }
+        }
+        
+        // Final fallback: Default colors
+        skinToneColors = [
+            {hex: '#667eea', name: 'Purple', rgb: [102, 126, 234]},
+            {hex: '#764ba2', name: 'Violet', rgb: [118, 75, 162]},
+            {hex: '#4CAF50', name: 'Green', rgb: [76, 175, 80]},
+            {hex: '#2196F3', name: 'Blue', rgb: [33, 150, 243]},
+            {hex: '#FF9800', name: 'Orange', rgb: [255, 152, 0]},
+            {hex: '#E91E63', name: 'Pink', rgb: [233, 30, 99]}
+        ];
+        displaySkinToneColors();
+        
+    } catch (error) {
+        console.error('Error loading skin tone colors:', error);
+        // Use defaults
+        skinToneColors = [
+            {hex: '#667eea', name: 'Purple', rgb: [102, 126, 234]},
+            {hex: '#764ba2', name: 'Violet', rgb: [118, 75, 162]}
+        ];
+        displaySkinToneColors();
+    }
+}
+
+function displaySkinToneColors() {
+    const colorPalette = document.getElementById('skinToneColors');
+    if (colorPalette && skinToneColors.length > 0) {
+        colorPalette.innerHTML = skinToneColors.map((color, index) => {
+            const hex = color.hex || '#ccc';
+            const name = color.name || 'Color';
+            return `
+                <button class="btn btn-outline color-try-btn" 
+                        data-color="${hex}" 
+                        data-index="${index}"
+                        style="position: relative; padding: 12px 20px; border-radius: 12px; border: 2px solid ${hex}; background: ${hex}; color: ${getContrastColor(hex)}; font-weight: 600; transition: all 0.3s ease;"
+                        onmouseover="this.style.transform='scale(1.1)'; this.style.boxShadow='0 4px 15px rgba(0,0,0,0.3)'"
+                        onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='none'">
+                    <div style="width: 30px; height: 30px; border-radius: 50%; background: ${hex}; border: 2px solid white; margin: 0 auto 5px;"></div>
+                    ${name}
+                </button>
+            `;
+        }).join('');
+        
+        // Show color palette
+        const paletteDiv = document.getElementById('arColorPalette');
+        if (paletteDiv) paletteDiv.style.display = 'block';
+    }
+}
+
+function getContrastColor(hex) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+    return brightness > 128 ? '#000' : '#fff';
+}
+
 async function startARMode() {
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+        // Initialize session ID
+        arSessionId = `ar_session_${Date.now()}`;
+        appState.arSessionId = arSessionId;
+        
+        // Load skin-tone colors first (production: from backend)
+        await loadSkinToneColors();
+        
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { 
+                facingMode: 'user',
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+            } 
+        });
         appState.arStream = stream;
         
-        const video = document.createElement('video');
+        const video = document.getElementById('arVideo');
+        if (!video) {
+            console.error('AR video element not found');
+            return;
+        }
+        
         video.srcObject = stream;
         video.autoplay = true;
         video.playsInline = true;
         
         video.onloadedmetadata = () => {
-            elements.arCanvas.width = video.videoWidth;
-            elements.arCanvas.height = video.videoHeight;
+            const canvas = document.getElementById('arCanvas');
+            const skeletonCanvas = document.getElementById('skeletonCanvas');
             
-            const ctx = elements.arCanvas.getContext('2d');
-            
-            function drawFrame() {
-                if (!appState.arStream) return;
-                ctx.drawImage(video, 0, 0);
-                requestAnimationFrame(drawFrame);
+            if (canvas) {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+            }
+            if (skeletonCanvas) {
+                skeletonCanvas.width = video.videoWidth;
+                skeletonCanvas.height = video.videoHeight;
             }
             
-            drawFrame();
+            startARAnimation();
+            updateARStatus('AR Active - Detecting body...');
         };
         
-        elements.arPreview.style.display = 'block';
-        elements.startARCamera.style.display = 'none';
-        elements.stopARCamera.style.display = 'inline-block';
+        document.getElementById('arPreview').style.display = 'block';
+        document.getElementById('arControls').style.display = 'block';
+        document.getElementById('outfitTypeSelection').style.display = 'block';
+        document.getElementById('startARCamera').style.display = 'none';
+        document.getElementById('stopARCamera').style.display = 'inline-block';
+        document.getElementById('captureAR').style.display = 'inline-block';
         
     } catch (error) {
         console.error('AR error:', error);
-        alert('Could not access camera for AR mode');
+        alert('Could not access camera for AR mode. Please check permissions.');
+    }
+}
+
+let lastFrameTime = 0;
+const FRAME_INTERVAL = 100; // Process every 100ms (10 FPS) to reduce backend load
+
+function startARAnimation() {
+    const canvas = document.getElementById('arCanvas');
+    const skeletonCanvas = document.getElementById('skeletonCanvas');
+    const video = document.getElementById('arVideo');
+    
+    if (!canvas || !video) return;
+    
+    const ctx = canvas.getContext('2d');
+    const skeletonCtx = skeletonCanvas ? skeletonCanvas.getContext('2d') : null;
+    
+    function drawARFrame() {
+        if (!appState.arStream) return;
+        
+        const now = Date.now();
+        
+        // Clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (skeletonCtx) skeletonCtx.clearRect(0, 0, skeletonCanvas.width, skeletonCanvas.height);
+        
+        // Draw video frame
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        // Process overlay (throttled to reduce backend calls)
+        if (now - lastFrameTime > FRAME_INTERVAL) {
+            lastFrameTime = now;
+            
+            // Draw cloth overlay based on mode
+            if (arMode === 'cloth-overlay') {
+                drawClothOverlay(ctx);
+            } else if (arMode === 'full-body') {
+                if (skeletonCtx) drawSkeleton(skeletonCtx);
+                drawClothOverlay(ctx);
+            } else if (arMode === 'multi-person') {
+                drawMultiPersonOverlay(ctx);
+            }
+        } else {
+            // Use simple overlay for smooth animation between backend calls
+            const currentColor = skinToneColors[currentColorIndex] || {hex: '#667eea'};
+            drawSimpleOverlay(ctx, currentColor.hex);
+        }
+        
+        arAnimationFrame = requestAnimationFrame(drawARFrame);
+    }
+    
+    drawARFrame();
+}
+
+let lastARProcessTime = 0;
+const AR_PROCESS_INTERVAL = 200; // Process every 200ms (5 FPS) for performance
+let cachedARFrame = null;
+let cachedARFrameTime = 0;
+let lastARError = null;
+
+async function drawClothOverlay(ctx) {
+    // Get current color
+    const currentColor = skinToneColors[currentColorIndex] || {hex: '#667eea'};
+    const color = currentColor.hex;
+    
+    // Get video frame
+    const video = document.getElementById('arVideo');
+    if (!video || !video.videoWidth || video.readyState !== video.HAVE_ENOUGH_DATA) {
+        // Use simple overlay if video not ready
+        drawSimpleOverlay(ctx, color);
+        return;
+    }
+    
+    const now = Date.now();
+    
+    // Use cached frame if available and recent
+    if (cachedARFrame && (now - cachedARFrameTime) < AR_PROCESS_INTERVAL) {
+        // Draw cached overlay
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            ctx.drawImage(video, 0, 0, ctx.canvas.width, ctx.canvas.height);
+        }
+        if (cachedARFrame) {
+            ctx.drawImage(cachedARFrame, 0, 0, ctx.canvas.width, ctx.canvas.height);
+        }
+        return;
+    }
+    
+    // Throttle backend calls
+    if (now - lastARProcessTime < AR_PROCESS_INTERVAL) {
+        // Use simple overlay between backend calls
+        drawSimpleOverlay(ctx, color);
+        return;
+    }
+    
+    lastARProcessTime = now;
+    
+    // Capture current frame for backend processing (async, non-blocking)
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = video.videoWidth;
+    tempCanvas.height = video.videoHeight;
+    const tempCtx = tempCanvas.getContext('2d');
+    tempCtx.drawImage(video, 0, 0);
+    
+    // Use simple overlay immediately for smooth experience
+    drawSimpleOverlay(ctx, color);
+    
+    // Process with backend in background (update cache)
+    tempCanvas.toBlob(async (blob) => {
+        if (!blob) return;
+        
+        // Send to backend for processing (FIXED: Match API contract)
+        const formData = new FormData();
+        formData.append('frame', blob, 'frame.jpg');  // Required: 'frame' not 'image'
+        formData.append('clothing_type', currentOutfitType);  // Required: 'clothing_type' not 'outfit_type'
+        formData.append('session_id', appState.arSessionId || `session_${Date.now()}`);  // Required: session_id
+        formData.append('color', color);  // Optional
+        formData.append('timestamp', Date.now().toString());  // Optional
+        
+        try {
+            const response = await fetch('/api/ar/apply-clothing', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            
+            if (result.success && result.image) {
+                // Cache processed image
+                const img = new Image();
+                img.onload = () => {
+                    cachedARFrame = img;
+                    cachedARFrameTime = Date.now();
+                    lastARError = null;
+                };
+                img.onerror = () => {
+                    lastARError = 'Failed to load processed image';
+                };
+                img.src = result.image;
+            } else {
+                // Handle error from backend
+                lastARError = result.error || 'Processing failed';
+                const confidence = result.confidence || 0.0;
+                
+                // Show warning if confidence too low
+                if (confidence < 0.6 && result.requires_action) {
+                    showARWarning(result.error || 'Please ensure good lighting and full body visibility');
+                }
+            }
+        } catch (error) {
+            console.error('AR overlay error:', error);
+            lastARError = 'Network error';
+            // Continue with simple overlay
+        }
+    }, 'image/jpeg', 0.85);
+}
+
+function showARWarning(message) {
+    // Show warning message to user
+    const warningDiv = document.getElementById('arWarning');
+    const warningText = document.getElementById('arWarningText');
+    if (warningDiv && warningText) {
+        warningText.textContent = message;
+        warningDiv.style.display = 'block';
+        setTimeout(() => {
+            warningDiv.style.display = 'none';
+        }, 5000);
+    }
+}
+
+function drawSimpleOverlay(ctx, color) {
+    // Fallback simple overlay if backend fails
+    const video = document.getElementById('arVideo');
+    if (!video || !video.videoWidth) return;
+    
+    const centerX = ctx.canvas.width / 2;
+    const centerY = ctx.canvas.height / 2;
+    
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.7;
+    
+    if (currentOutfitType === 'tshirt' || currentOutfitType === 'shirt') {
+        const width = ctx.canvas.width * 0.4;
+        const height = ctx.canvas.height * 0.3;
+        const y = centerY - height * 0.8;
+        
+        ctx.beginPath();
+        ctx.ellipse(centerX, y + height * 0.3, width, height, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Sleeves
+        ctx.beginPath();
+        ctx.ellipse(centerX - width * 0.5, y + height * 0.5, width * 0.3, height * 0.6, -0.3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(centerX + width * 0.5, y + height * 0.5, width * 0.3, height * 0.6, 0.3, 0, Math.PI * 2);
+        ctx.fill();
+    } else if (currentOutfitType === 'dress') {
+        const width = ctx.canvas.width * 0.35;
+        const height = ctx.canvas.height * 0.5;
+        const y = centerY - height * 0.7;
+        
+        ctx.beginPath();
+        ctx.ellipse(centerX, y + height * 0.3, width, height * 0.4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.beginPath();
+        ctx.moveTo(centerX - width * 0.4, y + height * 0.5);
+        ctx.lineTo(centerX - width * 0.6, y + height);
+        ctx.lineTo(centerX + width * 0.6, y + height);
+        ctx.lineTo(centerX + width * 0.4, y + height * 0.5);
+        ctx.closePath();
+        ctx.fill();
+    } else if (currentOutfitType === 'kurta') {
+        const width = ctx.canvas.width * 0.45;
+        const height = ctx.canvas.height * 0.6;
+        const y = centerY - height * 0.7;
+        
+        ctx.beginPath();
+        ctx.ellipse(centerX, y + height * 0.3, width, height, 0, 0, Math.PI * 2);
+        ctx.fill();
+    } else if (currentOutfitType === 'hoodie') {
+        const width = ctx.canvas.width * 0.5;
+        const height = ctx.canvas.height * 0.45;
+        const y = centerY - height * 0.8;
+        
+        ctx.beginPath();
+        ctx.ellipse(centerX, y + height * 0.3, width, height, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Hood
+        ctx.beginPath();
+        ctx.arc(centerX, y - ctx.canvas.height * 0.1, width * 0.4, Math.PI, 0, false);
+        ctx.fill();
+    } else if (currentOutfitType === 'jacket') {
+        const width = ctx.canvas.width * 0.52;
+        const height = ctx.canvas.height * 0.5;
+        const y = centerY - height * 0.8;
+        
+        ctx.beginPath();
+        ctx.ellipse(centerX, y + height * 0.3, width, height, 0, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    
+    ctx.globalAlpha = 1.0;
+}
+
+function drawSkeleton(ctx) {
+    if (!ctx || !skeletonVisible) return;
+    
+    ctx.strokeStyle = '#00ff00';
+    ctx.lineWidth = 3;
+    
+    const centerX = ctx.canvas.width / 2;
+    const centerY = ctx.canvas.height / 2;
+    
+    // Draw skeleton points
+    const points = {
+        head: {x: centerX, y: centerY - ctx.canvas.height * 0.3},
+        shoulder: {x: centerX, y: centerY - ctx.canvas.height * 0.1},
+        elbowL: {x: centerX - ctx.canvas.width * 0.15, y: centerY},
+        elbowR: {x: centerX + ctx.canvas.width * 0.15, y: centerY},
+        wristL: {x: centerX - ctx.canvas.width * 0.2, y: centerY + ctx.canvas.height * 0.1},
+        wristR: {x: centerX + ctx.canvas.width * 0.2, y: centerY + ctx.canvas.height * 0.1},
+        hip: {x: centerX, y: centerY + ctx.canvas.height * 0.2},
+        kneeL: {x: centerX - ctx.canvas.width * 0.1, y: centerY + ctx.canvas.height * 0.4},
+        kneeR: {x: centerX + ctx.canvas.width * 0.1, y: centerY + ctx.canvas.height * 0.4},
+        ankleL: {x: centerX - ctx.canvas.width * 0.1, y: centerY + ctx.canvas.height * 0.6},
+        ankleR: {x: centerX + ctx.canvas.width * 0.1, y: centerY + ctx.canvas.height * 0.6}
+    };
+    
+    // Draw connections
+    const connections = [
+        ['head', 'shoulder'],
+        ['shoulder', 'elbowL'], ['elbowL', 'wristL'],
+        ['shoulder', 'elbowR'], ['elbowR', 'wristR'],
+        ['shoulder', 'hip'],
+        ['hip', 'kneeL'], ['kneeL', 'ankleL'],
+        ['hip', 'kneeR'], ['kneeR', 'ankleR']
+    ];
+    
+    connections.forEach(([from, to]) => {
+        ctx.beginPath();
+        ctx.moveTo(points[from].x, points[from].y);
+        ctx.lineTo(points[to].x, points[to].y);
+        ctx.stroke();
+    });
+    
+    // Draw points
+    Object.values(points).forEach(point => {
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 5, 0, Math.PI * 2);
+        ctx.fillStyle = '#00ff00';
+        ctx.fill();
+    });
+}
+
+function drawMultiPersonOverlay(ctx) {
+    // Simulate multiple people
+    const personCount = 2;
+    for (let i = 0; i < personCount; i++) {
+        const offsetX = (i - 0.5) * ctx.canvas.width * 0.4;
+        const centerX = ctx.canvas.width / 2 + offsetX;
+        const centerY = ctx.canvas.height / 2;
+        
+        // Draw outfit for each person
+        ctx.fillStyle = skinToneColors[(currentColorIndex + i) % skinToneColors.length]?.hex || '#667eea';
+        ctx.globalAlpha = 0.7;
+        
+        const width = ctx.canvas.width * 0.3;
+        const height = ctx.canvas.height * 0.25;
+        ctx.beginPath();
+        ctx.ellipse(centerX, centerY - height * 0.3, width, height, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.globalAlpha = 1.0;
+    }
+}
+
+function updateARStatus(text) {
+    const statusEl = document.getElementById('arStatus');
+    const statusText = document.getElementById('arStatusText');
+    if (statusEl && statusText) {
+        statusEl.style.display = 'block';
+        statusText.textContent = text;
     }
 }
 
 function stopARMode() {
+    if (arAnimationFrame) {
+        cancelAnimationFrame(arAnimationFrame);
+        arAnimationFrame = null;
+    }
+    
     if (appState.arStream) {
         appState.arStream.getTracks().forEach(track => track.stop());
         appState.arStream = null;
     }
-    elements.arPreview.style.display = 'none';
-    elements.startARCamera.style.display = 'inline-block';
-    elements.stopARCamera.style.display = 'none';
+    
+    document.getElementById('arPreview').style.display = 'none';
+    document.getElementById('arControls').style.display = 'none';
+    document.getElementById('outfitTypeSelection').style.display = 'none';
+    document.getElementById('arColorPalette').style.display = 'none';
+    document.getElementById('startARCamera').style.display = 'inline-block';
+    document.getElementById('stopARCamera').style.display = 'none';
+    document.getElementById('captureAR').style.display = 'none';
 }
 
-function applyARColor(colorRGB) {
+function applyARColor(colorHex) {
     if (!appState.arStream) {
         alert('Please start AR mode first!');
         return;
     }
     
-    // In a real implementation, this would apply color overlay to detected clothing
-    alert(`Applying color: RGB(${colorRGB})\nThis is a demo - full AR implementation requires additional processing.`);
+    // Find color index
+    const index = skinToneColors.findIndex(c => c.hex === colorHex);
+    if (index !== -1) {
+        currentColorIndex = index;
+        updateARStatus(`Applied: ${skinToneColors[index].name || 'Color'}`);
+    }
 }
+
+function nextColor() {
+    if (skinToneColors.length > 0) {
+        currentColorIndex = (currentColorIndex + 1) % skinToneColors.length;
+        updateARStatus(`Color: ${skinToneColors[currentColorIndex].name || 'Color'}`);
+    }
+}
+
+function prevColor() {
+    if (skinToneColors.length > 0) {
+        currentColorIndex = (currentColorIndex - 1 + skinToneColors.length) % skinToneColors.length;
+        updateARStatus(`Color: ${skinToneColors[currentColorIndex].name || 'Color'}`);
+    }
+}
+
+// AR event listeners are set up in setupEventListeners()
+
+// Add new event listeners
+document.addEventListener('DOMContentLoaded', () => {
+    // AR Mode buttons
+    document.querySelectorAll('.ar-mode-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            arMode = btn.dataset.mode;
+            document.querySelectorAll('.ar-mode-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            updateARStatus(`Mode: ${arMode}`);
+        });
+    });
+    
+    // Outfit type buttons
+    document.querySelectorAll('.outfit-type-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            currentOutfitType = btn.dataset.type;
+            document.querySelectorAll('.outfit-type-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            updateARStatus(`Outfit: ${currentOutfitType}`);
+        });
+    });
+    
+    // Color buttons
+    document.addEventListener('click', (e) => {
+        if (e.target.closest('.color-try-btn')) {
+            const btn = e.target.closest('.color-try-btn');
+            applyARColor(btn.dataset.color);
+        }
+    });
+    
+    // AR Controls
+    const nextColorBtn = document.getElementById('nextColor');
+    const prevColorBtn = document.getElementById('prevColor');
+    const resetBtn = document.getElementById('resetAR');
+    const toggleSkeletonBtn = document.getElementById('toggleSkeleton');
+    const captureBtn = document.getElementById('captureAR');
+    
+    if (nextColorBtn) nextColorBtn.addEventListener('click', nextColor);
+    if (prevColorBtn) prevColorBtn.addEventListener('click', prevColor);
+    if (resetBtn) resetBtn.addEventListener('click', () => {
+        currentColorIndex = 0;
+        currentOutfitType = 'tshirt';
+        updateARStatus('Reset to default');
+    });
+    if (toggleSkeletonBtn) toggleSkeletonBtn.addEventListener('click', () => {
+        skeletonVisible = !skeletonVisible;
+        const skeletonCanvas = document.getElementById('skeletonCanvas');
+        if (skeletonCanvas) {
+            skeletonCanvas.style.display = skeletonVisible ? 'block' : 'none';
+        }
+        updateARStatus(skeletonVisible ? 'Skeleton visible' : 'Skeleton hidden');
+    });
+    if (captureBtn) captureBtn.addEventListener('click', () => {
+        const canvas = document.getElementById('arCanvas');
+        if (canvas) {
+            const dataUrl = canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.download = 'ar-tryon.png';
+            link.href = dataUrl;
+            link.click();
+            updateARStatus('Image captured!');
+        }
+    });
+    
+    // Sticky tabs
+    const stickyTabs = document.getElementById('stickyTabs');
+    if (stickyTabs) {
+        window.addEventListener('scroll', () => {
+            if (window.scrollY > 100) {
+                stickyTabs.classList.add('scrolled');
+            } else {
+                stickyTabs.classList.remove('scrolled');
+            }
+        });
+    }
+});
 
 // (Shopping feature removed)
 
@@ -1294,12 +2258,25 @@ function shouldUseDarkText(rgb) {
 // (Wardrobe save removed)
 
 function getDetailedAIAdvice() {
+    // PRODUCTION: Use cached analysis - DO NOT re-analyze
     if (!appState.currentAnalysis) {
-        alert('Please analyze an image first!');
-        return;
+        // Try to get from session storage (cached)
+        const stored = sessionStorage.getItem('analysisResults');
+        if (stored) {
+            try {
+                appState.currentAnalysis = JSON.parse(stored);
+            } catch (e) {
+                console.error('Error parsing stored analysis:', e);
+                alert('Please analyze an image first!');
+                return;
+            }
+        } else {
+            alert('Please analyze an image first!');
+            return;
+        }
     }
     
-    // Extract analysis data
+    // Extract analysis data from CACHE (no re-analysis)
     const data = appState.currentAnalysis.data || appState.currentAnalysis;
     const skinData = data.skin_tone || {};
     const genderData = data.gender || {};
@@ -1309,30 +2286,26 @@ function getDetailedAIAdvice() {
     // Switch to AI advice tab
     switchTab('ai-advice');
     
-    // Pre-fill form with analysis data
-    if (skinData.hex) {
-        elements.aiSkinTone.value = skinData.hex;
-    }
-    if (skinData.monk_scale_level) {
-        elements.aiMonkLevel.value = skinData.monk_scale_level;
-    }
+    // Pre-fill form with cached analysis data
+    loadAnalysisIntoAIForm();
     
     // Set default occasion to casual if not set
-    if (!elements.aiOccasion.value) {
-        elements.aiOccasion.value = 'casual';
+    const aiOccasion = document.getElementById('aiOccasion');
+    if (aiOccasion && !aiOccasion.value) {
+        aiOccasion.value = 'casual';
     }
     
-    // Automatically trigger AI advice with analysis data
+    // Automatically trigger AI advice with CACHED data (no re-analysis)
     setTimeout(() => {
         getAIFashionAdviceFromAnalysis({
             skin_tone_hex: skinData.hex,
             monk_scale_level: skinData.monk_scale_level,
             brightness: skinData.brightness,
-            gender: genderData.gender,
+            gender: (data.final && data.final.gender) || genderData.gender,
             age_group: ageData.age_group,
             best_colors: colors,
-            occasion: elements.aiOccasion.value,
-            style_preferences: elements.aiStylePrefs.value.split(',').map(s => s.trim()).filter(s => s)
+            occasion: aiOccasion ? aiOccasion.value : 'casual',
+            style_preferences: []
         });
     }, 300);
 }

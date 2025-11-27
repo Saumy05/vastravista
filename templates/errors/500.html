@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}500 - Server Error{% endblock %}
+{% block content %}
+<div style="min-height: calc(100vh - 200px); display: flex; align-items: center; justify-content: center; text-align: center; padding: 2rem;">
+  <div>
+    <h1 style="font-size: 6em; font-weight: 800; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 1rem;">500</h1>
+    <h2 style="font-size: 2em; color: #333; margin-bottom: 1rem;">Internal Server Error</h2>
+    <p style="color: #666; font-size: 1.2em; margin-bottom: 2rem;">Something went wrong on our end. Please try again later.</p>
+    <a href="{% if current_user and current_user.is_authenticated %}{{ url_for('auth.dashboard') }}{% else %}{{ url_for('auth.login') }}{% endif %}" 
+       style="display: inline-block; padding: 1rem 2rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 12px; font-weight: 600; transition: all 0.3s ease;">
+      Go Home
+    </a>
+  </div>
+</div>
+{% endblock %}
+

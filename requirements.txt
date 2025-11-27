@@ -1,7 +1,29 @@
+# Core Flask Framework
 Flask>=3.0.0
 Flask-CORS>=4.0.0
 Werkzeug>=3.0.0
 Flask-Login>=0.6.3
 Flask-SQLAlchemy>=3.1.1
+
+# Environment & Configuration
 python-dotenv>=1.0.0
+
+# Document Generation
 python-docx>=0.8.11
+reportlab>=4.0.0
+
+# Computer Vision & Image Processing
+opencv-python>=4.8.0
+numpy>=1.24.0
+Pillow>=10.0.0
+mediapipe>=0.10.0
+
+# AI/ML Models (if using)
+# tensorflow>=2.13.0  # Uncomment if using TensorFlow models
+# torch>=2.0.0  # Uncomment if using PyTorch models
+
+# Utilities
+requests>=2.31.0
+
+# Desktop Application (Optional - for vastravista_desktop.py and vastravista_opencv.py)
+streamlit>=1.28.0  # For Streamlit-based desktop app
